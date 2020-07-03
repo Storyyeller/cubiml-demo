@@ -1,0 +1,234 @@
+<html>
+    <meta charset="utf-8">
+    <head>
+        <title>CubiML demo</title>
+    </head>
+    <body>
+        <style>
+            #container {
+                width: 50em;
+                height: 25em;
+                position: relative;
+            }
+            #container.loading {
+                opacity: 85%;
+            }
+
+            #container form {
+                margin: 0;
+            }
+            #container, #prompt, #editor {
+                background: darkslategrey;
+                color: white;
+            }
+
+            #loading {
+                position: absolute;
+                top: 15%;
+                left: 12%;
+            }
+
+
+            #pane1, #pane2 {
+                float: left;
+                width: 50%;
+                height: 100%;
+
+                display: flex;
+                flex-direction: column;
+            }
+            #editor {
+                height: 100%;
+                resize: none;
+                margin: 0;
+            }
+
+
+            #container .error {
+                background: darkred;
+            }
+
+            #container pre {
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+                margin: 0;
+            }
+
+            #output {
+                overflow-y: scroll;
+            }
+            #input-line {
+                display: flex;
+            }
+            #prompt {
+                flex-grow: 1;
+                border: 0;
+            }
+            #space-below-prompt {
+                flex-grow: 1;
+            }
+        </style>
+
+        <div id=container class=loading>
+            <div id=loading>Loading, please wait...</div>
+
+            <div id=pane1>
+                <textarea id=editor></textarea>
+                <button id=compile-and-run type=button>Compile and run</button>
+            </div>
+
+            <div id=pane2>
+                <div id=output>
+                </div>
+
+                <form id=rhs-form>
+                <pre id=input-line>&gt;&gt; <input id=prompt type="text" autocomplete="off" placeholder="Enter code here" disabled></pre>
+                </form>
+
+                <div id=space-below-prompt></div>
+            </div>
+        </div>
+    </body>
+</html>
+
+
+ <script type="text/javascript">
+'use strict';
+
+function initializeRepl(compiler, Printer) {
+    console.log('Initializing REPL');
+    const container = document.getElementById('container');
+    const output = document.getElementById('output');
+    const prompt = document.getElementById('prompt');
+    const editor = document.getElementById('editor');
+    // const form = document.getElementById('form');
+
+    function addOutput(line, cls) {
+        const l = document.createElement('pre');
+        l.textContent = line;
+        if (cls) {
+            l.classList.add(cls);
+        }
+        output.appendChild(l);
+        return l;
+    }
+
+    const $ = Object.create(null);
+    const history = [];
+    let history_offset = -1;
+
+    function execCode(script) {
+        if (!compiler.process(script)) {return [false, compiler.get_err()];}
+        const compiled = '(' + compiler.get_output() + ')';
+        try {
+            const val = eval(compiled);
+            return [true, (new Printer).print(val)];
+        } catch (e) {
+            return [false, 'An error occured during evaluation in the repl: ' + e.toString()];
+        }
+    }
+
+    function processCode(script) {
+        const [success, res] = execCode(script);
+        addOutput(res, success ? 'success' : 'error').scrollIntoView(false);
+        return success;
+    }
+
+    function processReplInput(line) {
+        line = line.trim();
+        if (!line) {return;}
+
+        history_offset = -1;
+        if (history[history.length-1] !== line) {history.push(line);}
+        // \u00a0 = non breaking space
+        addOutput('>>\u00a0' + line, 'input');
+        processCode(line);
+    }
+
+    document.getElementById('compile-and-run').addEventListener('click', e => {
+        const s = editor.value.trim();
+        if (!s) {return;}
+
+        // Clear repl output
+        output.textContent = '';
+        compiler.reset();
+        if (processCode(s)) {prompt.focus({preventScroll: true})}
+    });
+
+    // Implement repl command history
+    prompt.addEventListener('keydown', e => {
+        switch (e.key) {
+            case 'ArrowDown': history_offset -= 1; break;
+            case 'ArrowUp': history_offset += 1; break;
+            default: return;
+        }
+        e.preventDefault();
+
+        if (history_offset >= history.length) {history_offset = history.length - 1;}
+        if (history_offset < 0) {history_offset = 0;}
+        prompt.value = history[history.length - history_offset - 1];
+    });
+
+    // If they click in the space below the prompt, focus on the prompt to make it easier to select
+    document.getElementById('space-below-prompt').addEventListener('click', e => {
+        e.preventDefault();
+        prompt.focus({preventScroll: true});
+    });
+
+    document.getElementById('rhs-form').addEventListener('submit', e => {
+        e.preventDefault();
+        const s = prompt.value.trim();
+        prompt.value = '';
+
+        if (!s) {return;}
+        processReplInput(s);
+    });
+
+    container.classList.remove('loading');
+    prompt.disabled = false;
+    container.removeChild(document.getElementById('loading'));
+    console.log('Initialized REPL');
+}
+
+class Printer {
+    constructor() {
+        this.parts = [];
+        this.seen = new WeakSet;
+    }
+
+    visit(e) {
+        const type = typeof e;
+        if (type === 'function') {this.parts.push('<fun>'); return;}
+        if (type === 'boolean' || type === 'string' || type === 'number') {this.parts.push(JSON.stringify(e)); return;}
+
+        if (this.seen.has(e)) {this.parts.push('...'); return;}
+        this.seen.add(e);
+
+        if (Array.isArray(e)) {
+            this.parts.push('`' + e[0]);
+            this.visit(e[1]);
+        } else {
+            this.parts.push('{');
+            let first = true;
+            for (const [k, v] of Object.entries(e)) {
+                if (!first) {this.parts.push('; ')}
+                first = false;
+
+                this.parts.push(k + '=');
+                this.visit(v);
+            }
+            this.parts.push('}');
+        }
+    }
+
+    print(e) {this.visit(e); return this.parts.join('');}
+}
+
+let mod = null;
+import('./pkg/cubiml_demo.js').then(
+    m => (mod = m, mod.default())).then(
+    wasm => initializeRepl(mod.State.new(), Printer)).catch(
+    e => {document.getElementById('loading').textContent = 'Failed to load demo: ' + e});
+
+
+ </script>

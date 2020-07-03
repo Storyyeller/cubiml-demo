@@ -1,0 +1,150 @@
+
+Cubiml is a simple ML-like programming language with subtyping and full type inference. You can try it out online in your browser [here](https://storyyeller.github.io/cubiml-demo/demo.html). Cubiml uses _cubic biunification_, a faster and simpler type inference algorithm based on [Algebraic Subtyping](https://www.cs.tufts.edu/~nr/cs257/archive/stephen-dolan/thesis.pdf). Cubiml is not intended to be used in its own right, but rather to serve as a tutorial for implementing cubic biunification, and therefore has a deliberately minimal feature set. 
+
+## Usage
+
+You can try out cubiml online in your browser at https://storyyeller.github.io/cubiml-demo/demo.html. 
+
+## A quick tour of Cubiml
+
+#### Booleans and conditionals
+
+In cubiml `if` is an expression, not a statement. The general form is `if <expr> then <expr> else <expr>` where the `<expr>`s are sub-expressions. The first expression is evaluated, and depending on whether it is true or false, one of the other two subexpressions is evaluated, and the result of the `if` expression is that expression's value. For example, evaluating `if false then "Hello" else "World"` would result in `"World"`. (The initial version of cubiml doesn't have strings or numbers - but the examples here use them anyway for the sake of demonstration). You can think of this as similar to the ternary operator (`a ? b : c`) present in some programming languages.
+
+#### Records and fields
+
+Records are a grouping of zero or more named values similar to "objects" or "structs" in other programming languages and are defined via `{name1=val1; name2=val2; ...}`. You can access the value of a field using the usual `.name` syntax. For example `{a=true; b="Hello"; c={}}.b` would evaluate to `"Hello"`.
+
+#### Functions
+
+In cubiml, all functions are required to take exactly one argument for simplicity. They are defined by `fun <arg> -> <expr>`. For example, a function which returns its argument unchanged could be written as `fun x -> x`. Functions are called by simply suffixing an argument, i.e. writing `a b` where `a` is the function to be called and `b` is the argument. For example 
+
+    (fun b -> if b then "Hello" else "World") true
+
+would evaluate to `"Hello"`, while 
+
+    (fun x -> x.foo) {bar=false; foo="Bob"}
+
+would evaluate to `"Bob"`. 
+
+You can work around the one-argument limitation and simulate multiple function arguments by passing in a record. For example, instead of 
+
+```js
+function sum(a, b) {
+    return a + b;
+}
+
+sum(7, 8)
+```
+
+in cubiml, you could do something like
+
+```ocaml
+let sum = fun args -> args.a + args.b;
+
+sum {a=7; b=8}
+```
+
+#### Let bindings
+
+No programming language would be complete without the ability to bind values to a variable name for later reference. In cubiml, this is done slightly differently than you may be used to. The general format is `let <name> = <expr1> in <expr2>`, where the variable `<name>` is visible in the body of `<expr2>`. The entire thing is an expression which evaluates to whatever `<expr2>` evaluates to.
+
+For example,
+```ocaml
+let x = 7 * 8 in {foo=x; bar=x}     
+```
+would evaluate to `{foo=56; bar=56}`.
+
+Let bindings can of course be nested like any other expression. For example, 
+```ocaml
+let x = 3 + 4 in
+    let y = x * 2 in
+        {x=x; y=y}
+```
+would evaluate to `{x=7; y=14}`.
+
+This provides an equivalent to traditional imperative style code like the following that you might see in other languages
+
+```js
+let x = 3 + 4;
+let y = x * 2;
+return {x=x, y=y};
+```
+
+Note that the above format produces an expression which can be used in any context where an expression is expected. Cubiml follows the ML philosophy that (nearly) everything is an expression, even conditionals, function definitions, variable bindings, and other things that are statements in some languages.
+
+However, this style is inconvenient when  interactively entering code into a REPL ([Read Evaluate Print Loop](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop)), because it requires you to input the entire program at once. To handle this, cubiml allows an alternate non-expression format at the top level of your code. At the top level, you can omit the `in <expr>` part, in which case the let statement produces a global binding which is visible to all subsequent code. For example, here is a possible session of code entered into the cubiml REPL. 
+
+```
+>> let x = {}
+
+{}
+
+>> let y = {x=x; other=false}
+
+{x={}; other=false}
+
+>> let z = {other=y.other; foo={y=y; x=x}}
+
+{other=false; foo={y={x={}; other=false}; x=...}}
+```
+
+You can also separate multiple top level definitions with semicolons if you are entering multiple items at once.
+
+```
+>> let a = z.foo.y; let b = true
+
+true
+
+>> if b then y else x
+
+{x={}; other=false}
+```
+
+#### Recursive let bindings
+
+Sometimes, one wishes to have functions that call themselves recursively. Unfortunately, this is impossible with the above constructs since plain let-expressions can only refer to variables that were already defined. 
+
+In order to support recursion, cubiml offers _recursive let expressions_ which are defined via `let rec` and allow the definition of the variable to refer to itself. For example, you could define a recursive fibonacci function as follows:
+
+```ocaml
+let rec fib = fun x ->
+    if x <= 1 then 
+        1
+    else
+        fib(x - 1) + fib(x - 2)
+```
+
+In order to avoid code referring to variables that don't exist yet, the right hand side of `let rec` variable definitions is restricted to be a function definition.
+
+
+#### Mutual recursion
+
+The above syntax works for a single function that refers to itself, but in some cases, you may want to have multiple functions that each refer to each other. Unlike in the case with `let`, simply nesting `let rec`s won't work. Therefore, `let rec` allows _multiple_ variable bindings, seperated by `and`. For example, you can define mutually recursive `even` and `odd` functions as follows:
+
+```ocaml
+let rec even = fun x -> if x == 0 then true else odd(x-1)
+    and odd = fun x -> if x == 0 then false else even(x-1)
+```
+
+#### Case types and matching
+
+Sometimes you need to make different decisions based on runtime data in a type safe manner. Cubiml supports this via _case types_, also known as _sum types_ or _enums_. Basically, the way they work is that you can wrap a value with a tag, and then later match against it. The match expression has branches that execute different code depending on the runtime value of the tag. Crucially, each match branch has access to the static type of the original wrapped value for that specific tag. You can think of it like a simpler, statically checked version of Java's vistor pattern or a giant switch statement on an union in C.
+
+To wrap a value, prefix it with a grave (\`) character and an uppercase Tag. E.g. 
+    `Foo {hello="Hello"}
+
+You can later match on it like follows
+
+```ocaml
+
+let calculate_area = fun shape ->
+    match shape with
+          `Circle v -> v.rad *. v.rad *. 3.1415926
+        | `Rectangle v -> v.length *. v.height
+
+calculate_area `Circle {rad=6.7}
+calculate_area `Rectangle {height=1.1; length=2.2}
+```
+
+Notice that within the Circle branch, the code can access the rad field, and within the Rectangle branch, it can access the length and height field. Case types and matches let you essentially "unmix" distinct data types after they are mixed together in the program flow. Without case types, this would be impossible to do in a type safe manner.
