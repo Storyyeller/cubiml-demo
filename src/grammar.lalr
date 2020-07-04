@@ -57,8 +57,11 @@ Case: Box<ast::Expr> = {
     <Tag> <CaseExpr> => Box::new(ast::Expr::Case(<>)),
 }
 
+CaseMatchPattern = {
+    Tag Ident,
+}
 MatchArm = {
-    <Tag> <Ident> "->" <CallExpr>,
+    <CaseMatchPattern> "->" <CallExpr>,
 }
 Match: Box<ast::Expr> = {
     "match" <Expr> "with" <SepList<MatchArm, "|">> => Box::new(ast::Expr::Match(<>)),

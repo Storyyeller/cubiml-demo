@@ -4,6 +4,7 @@ pub enum Literal {
 }
 
 type VarDefinition = (String, Box<Expr>);
+type CaseMatchPattern = (String, String);
 
 #[derive(Debug)]
 pub enum Expr {
@@ -15,7 +16,7 @@ pub enum Expr {
     Let(VarDefinition, Box<Expr>),
     LetRec(Vec<VarDefinition>, Box<Expr>),
     Literal(Literal),
-    Match(Box<Expr>, Vec<(String, String, Box<Expr>)>),
+    Match(Box<Expr>, Vec<(CaseMatchPattern, Box<Expr>)>),
     Record(Vec<(String, Box<Expr>)>),
     Variable(String),
 }

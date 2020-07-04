@@ -134,7 +134,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
 
             let mut case_names = HashSet::with_capacity(cases.len());
             let mut case_type_pairs = Vec::with_capacity(cases.len());
-            for (tag, name, rhs_expr) in cases {
+            for ((tag, name), rhs_expr) in cases {
                 if !case_names.insert(&*name) {
                     return Err(SyntaxError(format!("Repeated match case {}", name)).into());
                 }

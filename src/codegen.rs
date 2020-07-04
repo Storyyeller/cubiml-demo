@@ -67,7 +67,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
         ast::Expr::Case(tag, expr) => {
             let tag = js::lit(Str(tag.clone()));
             let expr = compile(ctx, expr);
-            js::obj(vec![("tag".to_string(), tag), ("val".to_string(), expr)])
+            js::obj(vec![("$tag".to_string(), tag), ("$val".to_string(), expr)])
         }
         ast::Expr::FieldAccess(lhs_expr, name) => {
             let lhs = compile(ctx, lhs_expr);
@@ -140,11 +140,11 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let temp_var = js::field(ctx.scope_expr.clone(), "$".to_string());
             let part1 = js::assign(temp_var.clone(), compile(ctx, match_expr));
 
-            let tag_expr = js::field(temp_var.clone(), "tag".to_string());
-            let val_expr = js::field(temp_var, "val".to_string());
+            let tag_expr = js::field(temp_var.clone(), "$tag".to_string());
+            let val_expr = js::field(temp_var, "$val".to_string());
 
             let mut branches = Vec::new();
-            for (tag, name, rhs_expr) in cases {
+            for ((tag, name), rhs_expr) in cases {
                 ctx.ml_scope(|ctx| {
                     ctx.set_binding(name.to_string(), val_expr.clone());
                     branches.push((tag, compile(ctx, rhs_expr)));

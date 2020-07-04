@@ -204,9 +204,12 @@ class Printer {
         if (this.seen.has(e)) {this.parts.push('...'); return;}
         this.seen.add(e);
 
-        if (Array.isArray(e)) {
-            this.parts.push('`' + e[0]);
-            this.visit(e[1]);
+        if (e.$tag) {
+            this.parts.push(e.$tag);
+            if (!e.$val || typeof e.$val !== 'object') {
+                this.parts.push(' ');
+            }
+            this.visit(e.$val);
         } else {
             this.parts.push('{');
             let first = true;

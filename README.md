@@ -5,7 +5,7 @@ Cubiml is a simple ML-like programming language with subtyping and full type inf
 
 You can try out cubiml online in your browser at https://storyyeller.github.io/cubiml-demo/demo.html. 
 
-## A quick tour of Cubiml
+## A quick tour of cubiml
 
 #### Booleans and conditionals
 
@@ -148,3 +148,14 @@ calculate_area `Rectangle {height=1.1; length=2.2}
 ```
 
 Notice that within the Circle branch, the code can access the rad field, and within the Rectangle branch, it can access the length and height field. Case types and matches let you essentially "unmix" distinct data types after they are mixed together in the program flow. Without case types, this would be impossible to do in a type safe manner.
+
+## Building cubiml from source
+
+You will need to have lalrpop and wasm-pack installed. First, generate the parser code
+
+    lalrpop src/grammar.lalr
+
+Then build the wasm module and js wrapper with wasm-pack
+
+    wasm-pack build --target web
+
