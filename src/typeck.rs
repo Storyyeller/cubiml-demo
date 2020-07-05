@@ -81,11 +81,11 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
         }
         FuncDef(arg_name, body_expr) => {
             let (arg_type, arg_bound) = engine.var();
-            bindings.in_child_scope(|bindings| {
+            let body_type = bindings.in_child_scope(|bindings| {
                 bindings.insert(arg_name.clone(), arg_type);
-                let body_type = check_expr(engine, bindings, body_expr)?;
-                Ok(engine.func(arg_bound, body_type))
-            })
+                check_expr(engine, bindings, body_expr)
+            })?;
+            Ok(engine.func(arg_bound, body_type))
         }
         If(cond_expr, then_expr, else_expr) => {
             let cond_type = check_expr(engine, bindings, cond_expr)?;
@@ -110,8 +110,8 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
         LetRec(defs, rest_expr) => bindings.in_child_scope(|bindings| {
             let mut temp_bounds = Vec::with_capacity(defs.len());
             for (name, _) in defs {
-                let (temp, temp_bound) = engine.var();
-                bindings.insert(name.clone(), temp);
+                let (temp_type, temp_bound) = engine.var();
+                bindings.insert(name.clone(), temp_type);
                 temp_bounds.push(temp_bound);
             }
 
@@ -142,13 +142,11 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 let (wrapped_type, wrapped_bound) = engine.var();
                 case_type_pairs.push((tag.clone(), wrapped_bound));
 
-                bindings.in_child_scope(|bindings| {
+                let rhs_type = bindings.in_child_scope(|bindings| {
                     bindings.insert(name.clone(), wrapped_type);
-                    let rhs_type = check_expr(engine, bindings, rhs_expr)?;
-                    engine
-                        .flow(rhs_type, result_bound)
-                        .or_else(|e| Err(Box::new(e) as Box<dyn error::Error>))
+                    check_expr(engine, bindings, rhs_expr)
                 })?;
+                engine.flow(rhs_type, result_bound)?;
             }
 
             let bound = engine.case_use(case_type_pairs);
@@ -188,8 +186,8 @@ fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &a
         LetRecDef(defs) => {
             let mut temp_bounds = Vec::with_capacity(defs.len());
             for (name, _) in defs {
-                let (temp, temp_bound) = engine.var();
-                bindings.insert(name.clone(), temp);
+                let (temp_type, temp_bound) = engine.var();
+                bindings.insert(name.clone(), temp_type);
                 temp_bounds.push(temp_bound);
             }
 
