@@ -21,66 +21,73 @@ impl fmt::Display for TypeError {
 impl error::Error for TypeError {}
 
 #[derive(Debug, Clone)]
-enum TypeHead {
-    Bool,
-    Func { arg: ID, ret: ID },
-    Obj { fields: HashMap<String, ID> },
-    Case { cases: HashMap<String, ID> },
+enum VTypeHead {
+    VBool,
+    VFunc { arg: Use, ret: Value },
+    VObj { fields: HashMap<String, Value> },
+    VCase { cases: HashMap<String, Value> },
 }
-impl TypeHead {
-    fn check(lhs: &Self, rhs: &Self, out: &mut Vec<(ID, ID)>) -> Result<(), TypeError> {
-        use TypeHead::*;
+#[derive(Debug, Clone)]
+enum UTypeHead {
+    UBool,
+    UFunc { arg: Value, ret: Use },
+    UObj { fields: HashMap<String, Use> },
+    UCase { cases: HashMap<String, Use> },
+}
 
-        match (lhs, rhs) {
-            (&Bool, &Bool) => Ok(()),
-            (&Func { arg: arg1, ret: ret1 }, &Func { arg: arg2, ret: ret2 }) => {
-                out.push((ret1, ret2));
-                // flip the order since arguments are contrapositive
-                out.push((arg2, arg1));
-                Ok(())
-            }
-            (&Obj { fields: ref fields1 }, &Obj { fields: ref fields2 }) => {
-                for (name, &rhs2) in fields2 {
-                    match fields1.get(name) {
-                        Some(&lhs2) => {
-                            out.push((lhs2, rhs2));
-                        }
-                        None => {
-                            return Err(TypeError(format!("Missing field {}", name)));
-                        }
-                    }
-                }
-                Ok(())
-            }
-            (&Case { cases: ref cases1 }, &Case { cases: ref cases2 }) => {
-                for (name, &lhs2) in cases1 {
-                    match cases2.get(name) {
-                        Some(&rhs2) => {
-                            out.push((lhs2, rhs2));
-                        }
-                        None => {
-                            return Err(TypeError(format!("Unhandled case {}", name)));
-                        }
-                    }
-                }
-                Ok(())
-            }
-            _ => Err(TypeError("Unexpected types".to_string())),
+fn check_heads(lhs: &VTypeHead, rhs: &UTypeHead, out: &mut Vec<(Value, Use)>) -> Result<(), TypeError> {
+    use UTypeHead::*;
+    use VTypeHead::*;
+
+    match (lhs, rhs) {
+        (&VBool, &UBool) => Ok(()),
+        (&VFunc { arg: arg1, ret: ret1 }, &UFunc { arg: arg2, ret: ret2 }) => {
+            out.push((ret1, ret2));
+            // flip the order since arguments are contravariant
+            out.push((arg2, arg1));
+            Ok(())
         }
+        (&VObj { fields: ref fields1 }, &UObj { fields: ref fields2 }) => {
+            for (name, &rhs2) in fields2 {
+                match fields1.get(name) {
+                    Some(&lhs2) => {
+                        out.push((lhs2, rhs2));
+                    }
+                    None => {
+                        return Err(TypeError(format!("Missing field {}", name)));
+                    }
+                }
+            }
+            Ok(())
+        }
+        (&VCase { cases: ref cases1 }, &UCase { cases: ref cases2 }) => {
+            for (name, &lhs2) in cases1 {
+                match cases2.get(name) {
+                    Some(&rhs2) => {
+                        out.push((lhs2, rhs2));
+                    }
+                    None => {
+                        return Err(TypeError(format!("Unhandled case {}", name)));
+                    }
+                }
+            }
+            Ok(())
+        }
+        _ => Err(TypeError("Unexpected types".to_string())),
     }
 }
 
 #[derive(Debug, Clone)]
 enum TypeNode {
     Var,
-    Value(TypeHead),
-    Use(TypeHead),
+    Value(VTypeHead),
+    Use(UTypeHead),
 }
 #[derive(Debug, Clone)]
 pub struct TypeCheckerCore {
     pub r: reachability::Reachability,
 
-    pending_edges: Vec<(ID, ID)>,
+    pending_edges: Vec<(Value, Use)>,
 
     types: Vec<TypeNode>,
 }
@@ -96,13 +103,13 @@ impl TypeCheckerCore {
     fn process_pending_edges(&mut self) -> Result<(), TypeError> {
         let mut type_pairs_to_check = Vec::new();
         while let Some((lhs, rhs)) = self.pending_edges.pop() {
-            self.r.add_edge(lhs, rhs, &mut type_pairs_to_check);
+            self.r.add_edge(lhs.0, rhs.0, &mut type_pairs_to_check);
 
             // Check if adding that edge resulted in any new type pairs needing to be checked
             while let Some((lhs, rhs)) = type_pairs_to_check.pop() {
                 if let TypeNode::Value(lhs_head) = &self.types[lhs] {
                     if let TypeNode::Use(rhs_head) = &self.types[rhs] {
-                        TypeHead::check(lhs_head, rhs_head, &mut self.pending_edges)?;
+                        check_heads(lhs_head, rhs_head, &mut self.pending_edges)?;
                     }
                 }
             }
@@ -111,23 +118,14 @@ impl TypeCheckerCore {
         Ok(())
     }
 
-    fn unwrap(&self, t: Value) -> ID {
-        assert!(t.0 < self.types.len());
-        t.0
-    }
-    fn unwrap2(&self, t: Use) -> ID {
-        assert!(t.0 < self.types.len());
-        t.0
-    }
-
-    fn new_val(&mut self, val_type: TypeHead) -> Value {
+    fn new_val(&mut self, val_type: VTypeHead) -> Value {
         let i = self.r.add_node();
         assert!(i == self.types.len());
         self.types.push(TypeNode::Value(val_type));
         Value(i)
     }
 
-    fn new_use(&mut self, constraint: TypeHead) -> Use {
+    fn new_use(&mut self, constraint: UTypeHead) -> Use {
         let i = self.r.add_node();
         assert!(i == self.types.len());
         self.types.push(TypeNode::Use(constraint));
@@ -142,45 +140,39 @@ impl TypeCheckerCore {
     }
 
     pub fn bool(&mut self) -> Value {
-        self.new_val(TypeHead::Bool)
+        self.new_val(VTypeHead::VBool)
     }
     pub fn bool_use(&mut self) -> Use {
-        self.new_use(TypeHead::Bool)
+        self.new_use(UTypeHead::UBool)
     }
 
     pub fn func(&mut self, arg: Use, ret: Value) -> Value {
-        self.new_val(TypeHead::Func {
-            arg: self.unwrap2(arg),
-            ret: self.unwrap(ret),
-        })
+        self.new_val(VTypeHead::VFunc { arg, ret })
     }
     pub fn func_use(&mut self, arg: Value, ret: Use) -> Use {
-        self.new_use(TypeHead::Func {
-            arg: self.unwrap(arg),
-            ret: self.unwrap2(ret),
-        })
+        self.new_use(UTypeHead::UFunc { arg, ret })
     }
 
     pub fn obj(&mut self, fields: Vec<(String, Value)>) -> Value {
-        let fields = fields.into_iter().map(|(k, v)| (k, self.unwrap(v))).collect();
-        self.new_val(TypeHead::Obj { fields })
+        let fields = fields.into_iter().collect();
+        self.new_val(VTypeHead::VObj { fields })
     }
     pub fn obj_use(&mut self, fields: Vec<(String, Use)>) -> Use {
-        let fields = fields.into_iter().map(|(k, v)| (k, self.unwrap2(v))).collect();
-        self.new_use(TypeHead::Obj { fields })
+        let fields = fields.into_iter().collect();
+        self.new_use(UTypeHead::UObj { fields })
     }
 
     pub fn case(&mut self, cases: Vec<(String, Value)>) -> Value {
-        let cases = cases.into_iter().map(|(k, v)| (k, self.unwrap(v))).collect();
-        self.new_val(TypeHead::Case { cases })
+        let cases = cases.into_iter().collect();
+        self.new_val(VTypeHead::VCase { cases })
     }
     pub fn case_use(&mut self, cases: Vec<(String, Use)>) -> Use {
-        let cases = cases.into_iter().map(|(k, v)| (k, self.unwrap2(v))).collect();
-        self.new_use(TypeHead::Case { cases })
+        let cases = cases.into_iter().collect();
+        self.new_use(UTypeHead::UCase { cases })
     }
 
     pub fn flow(&mut self, lhs: Value, rhs: Use) -> Result<(), TypeError> {
-        self.pending_edges.push((self.unwrap(lhs), self.unwrap2(rhs)));
+        self.pending_edges.push((lhs, rhs));
         self.process_pending_edges()
     }
 }
