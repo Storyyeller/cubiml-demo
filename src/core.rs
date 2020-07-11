@@ -79,36 +79,33 @@ enum TypeNode {
 }
 #[derive(Debug, Clone)]
 pub struct TypeCheckerCore {
-    pub r: reachability::Reachability,
-
-    pending_edges: Vec<(Value, Use)>,
-
+    r: reachability::Reachability,
     types: Vec<TypeNode>,
 }
 impl TypeCheckerCore {
     pub fn new() -> Self {
         Self {
             r: Default::default(),
-            pending_edges: Vec::new(),
             types: Vec::new(),
         }
     }
 
-    fn process_pending_edges(&mut self) -> Result<(), TypeError> {
+    pub fn flow(&mut self, lhs: Value, rhs: Use) -> Result<(), TypeError> {
+        let mut pending_edges = vec![(lhs, rhs)];
         let mut type_pairs_to_check = Vec::new();
-        while let Some((lhs, rhs)) = self.pending_edges.pop() {
+        while let Some((lhs, rhs)) = pending_edges.pop() {
             self.r.add_edge(lhs.0, rhs.0, &mut type_pairs_to_check);
 
             // Check if adding that edge resulted in any new type pairs needing to be checked
             while let Some((lhs, rhs)) = type_pairs_to_check.pop() {
                 if let TypeNode::Value(lhs_head) = &self.types[lhs] {
                     if let TypeNode::Use(rhs_head) = &self.types[rhs] {
-                        check_heads(lhs_head, rhs_head, &mut self.pending_edges)?;
+                        check_heads(lhs_head, rhs_head, &mut pending_edges)?;
                     }
                 }
             }
         }
-        assert!(self.pending_edges.is_empty() && type_pairs_to_check.is_empty());
+        assert!(pending_edges.is_empty() && type_pairs_to_check.is_empty());
         Ok(())
     }
 
@@ -161,10 +158,5 @@ impl TypeCheckerCore {
     pub fn case_use(&mut self, cases: Vec<(String, Use)>) -> Use {
         let cases = cases.into_iter().collect();
         self.new_use(UTypeHead::UCase { cases })
-    }
-
-    pub fn flow(&mut self, lhs: Value, rhs: Use) -> Result<(), TypeError> {
-        self.pending_edges.push((lhs, rhs));
-        self.process_pending_edges()
     }
 }
