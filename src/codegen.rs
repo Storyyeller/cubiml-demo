@@ -162,12 +162,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             }
             js::comma_pair(part1, res)
         }
-        ast::Expr::Record(fields) => js::obj(
-            fields
-                .iter()
-                .map(|(name, expr)| (name.clone(), compile(ctx, expr)))
-                .collect(),
-        ),
+        ast::Expr::Record(fields) => js::obj(fields.iter().map(|(name, expr)| (name.clone(), compile(ctx, expr))).collect()),
         ast::Expr::Variable(name) => ctx.bindings.get(name).unwrap().clone(),
     }
 }

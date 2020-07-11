@@ -25,13 +25,13 @@ enum VTypeHead {
     VBool,
     VFunc { arg: Use, ret: Value },
     VObj { fields: HashMap<String, Value> },
-    VCase { cases: HashMap<String, Value> },
+    VCase { case: (String, Value) },
 }
 #[derive(Debug, Clone)]
 enum UTypeHead {
     UBool,
     UFunc { arg: Value, ret: Use },
-    UObj { fields: HashMap<String, Use> },
+    UObj { field: (String, Use) },
     UCase { cases: HashMap<String, Use> },
 }
 
@@ -47,31 +47,25 @@ fn check_heads(lhs: &VTypeHead, rhs: &UTypeHead, out: &mut Vec<(Value, Use)>) ->
             out.push((arg2, arg1));
             Ok(())
         }
-        (&VObj { fields: ref fields1 }, &UObj { fields: ref fields2 }) => {
-            for (name, &rhs2) in fields2 {
-                match fields1.get(name) {
-                    Some(&lhs2) => {
-                        out.push((lhs2, rhs2));
-                    }
-                    None => {
-                        return Err(TypeError(format!("Missing field {}", name)));
-                    }
+        (&VObj { fields: ref fields1 }, &UObj { field: (ref name, rhs2) }) => {
+            // Check if the accessed field is defined
+            match fields1.get(name) {
+                Some(&lhs2) => {
+                    out.push((lhs2, rhs2));
+                    Ok(())
                 }
+                None => Err(TypeError(format!("Missing field {}", name))),
             }
-            Ok(())
         }
-        (&VCase { cases: ref cases1 }, &UCase { cases: ref cases2 }) => {
-            for (name, &lhs2) in cases1 {
-                match cases2.get(name) {
-                    Some(&rhs2) => {
-                        out.push((lhs2, rhs2));
-                    }
-                    None => {
-                        return Err(TypeError(format!("Unhandled case {}", name)));
-                    }
+        (&VCase { case: (ref name, lhs2) }, &UCase { cases: ref cases2 }) => {
+            // Check if the right case is handled
+            match cases2.get(name) {
+                Some(&rhs2) => {
+                    out.push((lhs2, rhs2));
+                    Ok(())
                 }
+                None => Err(TypeError(format!("Unhandled case {}", name))),
             }
-            Ok(())
         }
         _ => Err(TypeError("Unexpected types".to_string())),
     }
@@ -157,14 +151,12 @@ impl TypeCheckerCore {
         let fields = fields.into_iter().collect();
         self.new_val(VTypeHead::VObj { fields })
     }
-    pub fn obj_use(&mut self, fields: Vec<(String, Use)>) -> Use {
-        let fields = fields.into_iter().collect();
-        self.new_use(UTypeHead::UObj { fields })
+    pub fn obj_use(&mut self, field: (String, Use)) -> Use {
+        self.new_use(UTypeHead::UObj { field })
     }
 
-    pub fn case(&mut self, cases: Vec<(String, Value)>) -> Value {
-        let cases = cases.into_iter().collect();
-        self.new_val(VTypeHead::VCase { cases })
+    pub fn case(&mut self, case: (String, Value)) -> Value {
+        self.new_val(VTypeHead::VCase { case })
     }
     pub fn case_use(&mut self, cases: Vec<(String, Use)>) -> Use {
         let cases = cases.into_iter().collect();

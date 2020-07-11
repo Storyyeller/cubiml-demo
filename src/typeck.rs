@@ -69,13 +69,13 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
         }
         Case(tag, val_expr) => {
             let val_type = check_expr(engine, bindings, val_expr)?;
-            Ok(engine.case(vec![(tag.clone(), val_type)]))
+            Ok(engine.case((tag.clone(), val_type)))
         }
         FieldAccess(lhs_expr, name) => {
             let lhs_type = check_expr(engine, bindings, lhs_expr)?;
 
             let (field_type, field_bound) = engine.var();
-            let bound = engine.obj_use(vec![(name.clone(), field_bound)]);
+            let bound = engine.obj_use((name.clone(), field_bound));
             engine.flow(lhs_type, bound)?;
             Ok(field_type)
         }
