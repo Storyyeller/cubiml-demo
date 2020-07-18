@@ -1,102 +1,170 @@
-use std::collections::HashSet;
-
-#[derive(Debug, Default, Clone)]
-struct OrderedSet<T> {
-    v: Vec<T>,
-    s: HashSet<T>,
-}
-impl<T: Eq + std::hash::Hash + Clone> OrderedSet<T> {
-    fn insert(&mut self, value: T) -> bool {
-        if self.s.insert(value.clone()) {
-            self.v.push(value);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn iter(&self) -> std::slice::Iter<T> {
-        self.v.iter()
-    }
-}
+use std::cell::RefCell;
+use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 
 type ID = usize;
 
 #[derive(Debug, Default, Clone)]
-pub struct Reachability {
-    upsets: Vec<OrderedSet<ID>>,
-    downsets: Vec<OrderedSet<ID>>,
+pub struct Naive {
+    upsets: Vec<HashSet<ID>>,
+    downsets: Vec<HashSet<ID>>,
 }
-impl Reachability {
+impl Naive {
     pub fn add_node(&mut self) -> ID {
         let i = self.upsets.len();
-        self.upsets.push(Default::default());
-        self.downsets.push(Default::default());
+
+        let mut set = HashSet::with_capacity(1);
+        set.insert(i);
+
+        self.upsets.push(set.clone());
+        self.downsets.push(set);
         i
     }
 
     pub fn add_edge(&mut self, lhs: ID, rhs: ID, out: &mut Vec<(ID, ID)>) {
-        let mut work = vec![(lhs, rhs)];
+        if self.downsets[lhs].contains(&rhs) {
+            return;
+        }
 
-        while let Some((lhs, rhs)) = work.pop() {
-            // Insert returns false if the edge is already present
-            if !self.downsets[lhs].insert(rhs) {
-                continue;
-            }
-            self.upsets[rhs].insert(lhs);
-            // Inform the caller that a new edge was added
-            out.push((lhs, rhs));
+        // Get all ancestors of lhs, including lhs itself
+        let mut lhs_set: Vec<ID> = self.upsets[lhs].iter().cloned().collect();
+        lhs_set.sort_unstable();
 
-            for &lhs2 in self.upsets[lhs].iter() {
-                work.push((lhs2, rhs));
-            }
-            for &rhs2 in self.downsets[rhs].iter() {
-                work.push((lhs, rhs2));
+        // Get all descendents of rhs, including rhs itself
+        let mut rhs_set: Vec<ID> = self.downsets[rhs].iter().cloned().collect();
+        rhs_set.sort_unstable();
+
+        for &lhs2 in &lhs_set {
+            for &rhs2 in &rhs_set {
+                if self.downsets[lhs2].insert(rhs2) {
+                    self.upsets[rhs2].insert(lhs2);
+                    out.push((lhs2, rhs2));
+                }
             }
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+struct TreeNodePtr(usize);
 
-    #[test]
-    fn test() {
-        let mut r = Reachability::default();
-        for i in 0..10 {
-            r.add_node();
+#[derive(Debug, Clone)]
+struct TreeNode {
+    id: ID,
+    children: RefCell<Vec<TreeNodePtr>>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Cubic {
+    arena: Vec<TreeNode>,
+    tree_roots: Vec<TreeNodePtr>,
+    tree_maps: Vec<HashMap<ID, TreeNodePtr>>,
+    reverse_map: Vec<Vec<ID>>,
+}
+impl Cubic {
+    fn get(&self, p: TreeNodePtr) -> &TreeNode {
+        &self.arena[p.0]
+    }
+
+    fn alloc(&mut self, id: ID) -> TreeNodePtr {
+        let p = self.arena.len();
+        self.arena.push(TreeNode {
+            id,
+            children: Default::default(),
+        });
+        TreeNodePtr(p)
+    }
+
+    fn insert_internal(
+        &mut self,
+        lhs_id: ID,
+        lhs_ptr: TreeNodePtr,
+        rhs_id: ID,
+        rhs_ptr: TreeNodePtr,
+        out: &mut Vec<(ID, ID)>,
+    ) -> bool {
+        assert!(lhs_ptr == *self.tree_maps[lhs_id].get(&self.get(lhs_ptr).id).unwrap());
+
+        if self.tree_maps[lhs_id].contains_key(&rhs_id) {
+            return false;
         }
 
-        let mut out = Vec::new();
-        r.add_edge(0, 8, &mut out);
-        assert_eq!(out, vec![(0, 8)]);
-        out.clear();
-        r.add_edge(0, 8, &mut out);
-        assert_eq!(out, vec![]);
+        let new_ptr = self.alloc(rhs_id);
+        self.tree_maps[lhs_id].insert(rhs_id, new_ptr);
+        self.get(lhs_ptr).children.borrow_mut().push(new_ptr);
+        out.push((lhs_id, rhs_id));
 
-        r.add_edge(0, 3, &mut out);
-        r.add_edge(1, 3, &mut out);
-        r.add_edge(2, 3, &mut out);
-        r.add_edge(4, 5, &mut out);
-        r.add_edge(4, 6, &mut out);
-        r.add_edge(4, 7, &mut out);
-        r.add_edge(6, 7, &mut out);
-        r.add_edge(9, 1, &mut out);
-        r.add_edge(9, 8, &mut out);
+        let children = self.get(rhs_ptr).children.borrow().clone();
+        for child_ptr in children {
+            let child_id = self.get(child_ptr).id;
+            self.insert_internal(lhs_id, new_ptr, child_id, child_ptr, out);
+        }
+        true
+    }
 
-        out.clear();
-        r.add_edge(3, 4, &mut out);
+    fn insert_toplevel(
+        &mut self,
+        lhs_id: ID,
+        lhs_ptr: TreeNodePtr,
+        rhs_id: ID,
+        rhs_ptr: TreeNodePtr,
+        out: &mut Vec<(ID, ID)>,
+    ) {
+        if self.insert_internal(lhs_id, lhs_ptr, rhs_id, rhs_ptr, out) {
+            self.reverse_map[rhs_id].push(lhs_id);
 
-        let mut expected = Vec::new();
-        for &lhs in &[0, 1, 2, 3, 9] {
-            for &rhs in &[4, 5, 6, 7] {
-                expected.push((lhs, rhs));
+            let parents = self.reverse_map[lhs_id].clone();
+            for parent_id in parents {
+                let parent_ptr = *self.tree_maps[parent_id].get(&lhs_id).unwrap();
+                self.insert_toplevel(parent_id, parent_ptr, rhs_id, rhs_ptr, out);
             }
         }
+    }
 
-        out.sort_unstable();
-        expected.sort_unstable();
-        assert_eq!(out, expected);
+    pub fn add_node(&mut self) -> ID {
+        let id = self.tree_roots.len();
+        let p = self.alloc(id);
+        let mut map = HashMap::with_capacity(1);
+        map.insert(id, p);
+
+        self.tree_roots.push(p);
+        self.tree_maps.push(map);
+        self.reverse_map.push(Vec::new());
+        id
+    }
+
+    pub fn add_edge(&mut self, lhs: ID, rhs: ID, out: &mut Vec<(ID, ID)>) {
+        self.insert_toplevel(lhs, self.tree_roots[lhs], rhs, self.tree_roots[rhs], out)
+    }
+}
+
+// Run both engines in parallel to check for bugs
+#[derive(Debug, Default, Clone)]
+pub struct Both {
+    a: Naive,
+    b: Cubic,
+}
+impl Both {
+    pub fn add_node(&mut self) -> ID {
+        let r = self.a.add_node();
+        assert!(r == self.b.add_node());
+        r
+    }
+
+    pub fn add_edge(&mut self, lhs: ID, rhs: ID, out: &mut Vec<(ID, ID)>) {
+        let mut ra = Vec::new();
+        let mut rb = Vec::new();
+
+        self.a.add_edge(lhs, rhs, &mut ra);
+        self.b.add_edge(lhs, rhs, &mut rb);
+
+        ra.sort_unstable();
+        rb.sort_unstable();
+        if &ra != &rb {
+            dbg!(&ra);
+            dbg!(&rb);
+        }
+        assert!(ra == rb);
+        out.extend(ra);
     }
 }
