@@ -4,8 +4,6 @@ use std::mem::swap;
 use crate::ast;
 use crate::js;
 
-use js::Literal::*;
-
 pub struct ModuleBuilder {
     scope_expr: js::Expr,
     scope_counter: u64,
@@ -69,7 +67,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             js::call(lhs, rhs)
         }
         ast::Expr::Case(tag, expr) => {
-            let tag = js::lit(Str(tag.clone()));
+            let tag = js::lit(format!("\"{}\"", tag));
             let expr = compile(ctx, expr);
             js::obj(vec![("$tag".to_string(), tag), ("$val".to_string(), expr)])
         }
@@ -137,9 +135,17 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 js::comma_list(exprs)
             })
         }
-        ast::Expr::Literal(val) => js::lit(match val {
-            ast::Literal::Bool(v) => Bool(*v),
-        }),
+        ast::Expr::Literal(type_, code) => {
+            let mut code = code.clone();
+            if let ast::Literal::Int = type_ {
+                code.push_str("n");
+            }
+            if code.starts_with("-") {
+                js::unary_minus(js::lit(code[1..].to_string()))
+            } else {
+                js::lit(code)
+            }
+        }
         ast::Expr::Match(match_expr, cases) => {
             let temp_var = js::field(ctx.scope_expr.clone(), ctx.new_var_name());
             let part1 = js::assign(temp_var.clone(), compile(ctx, match_expr));
@@ -157,7 +163,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
 
             let mut res = branches.pop().unwrap().1;
             while let Some((tag, rhs_expr)) = branches.pop() {
-                let cond = js::eqop(tag_expr.clone(), js::lit(Str(tag.to_string())));
+                let cond = js::eqop(tag_expr.clone(), js::lit(format!("\"{}\"", tag)));
                 res = js::ternary(cond, rhs_expr, res);
             }
             js::comma_pair(part1, res)
@@ -197,4 +203,25 @@ fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::TopLevel]) -> js::Expr
     }
 
     js::comma_list(exprs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        use ast::*;
+
+        fn intlit(s: &str) -> Box<ast::Expr> {
+            Box::new(Expr::Literal(Literal::Int, s.to_string()))
+        }
+
+        let mut mb = ModuleBuilder::new();
+        assert_eq!(compile(&mut mb, &intlit("-1")).to_source(), "-1n");
+        assert_eq!(
+            compile(&mut mb, &Expr::FieldAccess(intlit("-1"), "toString".to_string())).to_source(),
+            "(-1n).toString"
+        );
+    }
 }

@@ -6,6 +6,13 @@ grammar;
 Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z]\w*"> => String::from(<>);
 
+IntLiteral: String = <r"-?(?:0|[1-9][[:digit:]]*)"> => String::from(<>);
+FloatLiteral: String =
+    <r"-?(?:0|[1-9][[:digit:]]*)\.[[:digit:]]*(?:[eE]-?[[:digit:]]+)?"> => String::from(<>);
+StringLiteral: String =
+    <r#""[^\\"]*(?:\\[tn'"\\][^\\"]*)*""#> => String::from(<>);
+
+
 // make sure __proto__ is not considered a valid identifier
 Illegal = "__proto__";
 
@@ -24,11 +31,14 @@ SepListOpt<T, Sep>: Vec<T> = {
 VarOrLiteral: Box<ast::Expr> = {
     Ident => Box::new(
         match <>.as_str() {
-            "true" => ast::Expr::Literal(ast::Literal::Bool(true)),
-            "false" => ast::Expr::Literal(ast::Literal::Bool(false)),
+            "false" | "true" => ast::Expr::Literal(ast::Literal::Bool, <>),
             _ => ast::Expr::Variable(<>)
         }
     ),
+
+    FloatLiteral => Box::new(ast::Expr::Literal(ast::Literal::Float, <>)),
+    IntLiteral => Box::new(ast::Expr::Literal(ast::Literal::Int, <>)),
+    StringLiteral => Box::new(ast::Expr::Literal(ast::Literal::Str, <>)),
 }
 
 If: Box<ast::Expr> = {

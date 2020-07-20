@@ -1,6 +1,9 @@
 #[derive(Debug)]
 pub enum Literal {
-    Bool(bool),
+    Bool,
+    Float,
+    Int,
+    Str,
 }
 
 type VarDefinition = (String, Box<Expr>);
@@ -15,7 +18,7 @@ pub enum Expr {
     If(Box<Expr>, Box<Expr>, Box<Expr>),
     Let(VarDefinition, Box<Expr>),
     LetRec(Vec<VarDefinition>, Box<Expr>),
-    Literal(Literal),
+    Literal(Literal, String),
     Match(Box<Expr>, Vec<(CaseMatchPattern, Box<Expr>)>),
     Record(Vec<(String, Box<Expr>)>),
     Variable(String),

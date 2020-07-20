@@ -118,8 +118,14 @@ function initializeRepl(compiler, Printer) {
     let history_offset = -1;
 
     function execCode(script) {
-        if (!compiler.process(script)) {return [false, compiler.get_err()];}
-        const compiled = '(' + compiler.get_output() + ')';
+        let compiled;
+        try {
+            if (!compiler.process(script)) {return [false, compiler.get_err()];}
+            compiled = '(' + compiler.get_output() + ')';
+        } catch (e) {
+            return [false, 'Internal compiler error: ' + e.toString()];
+        }
+
         try {
             const val = eval(compiled);
             return [true, (new Printer).print(val)];
@@ -198,8 +204,18 @@ class Printer {
 
     visit(e) {
         const type = typeof e;
+        if (type === 'boolean' || type === 'bigint') {this.parts.push(e.toString()); return;}
+        if (type === 'string') {this.parts.push(JSON.stringify(e)); return;}
+        if (type === 'number') {
+            let s = e.toString();
+            if (/^-?\d+$/.test(s)) {s += '.0'}
+            this.parts.push(s);
+            return;
+        }
         if (type === 'function') {this.parts.push('<fun>'); return;}
-        if (type === 'boolean' || type === 'string' || type === 'number') {this.parts.push(JSON.stringify(e)); return;}
+        if (type === 'symbol') {this.parts.push('<sym>'); return;}
+        if (e === null) {this.parts.push('<null>'); return;}
+        if (e === undefined) {this.parts.push('<undefined>'); return;}
 
         if (this.seen.has(e)) {this.parts.push('...'); return;}
         this.seen.add(e);

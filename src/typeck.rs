@@ -122,10 +122,13 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
 
             check_expr(engine, bindings, rest_expr)
         }),
-        Literal(val) => {
+        Literal(type_, code) => {
             use ast::Literal::*;
-            Ok(match val {
-                Bool(_) => engine.bool(),
+            Ok(match type_ {
+                Bool => engine.bool(),
+                Float => engine.float(),
+                Int => engine.int(),
+                Str => engine.str(),
             })
         }
         Match(match_expr, cases) => {

@@ -2,15 +2,9 @@
 #![allow(clippy::wrong_self_convention)]
 
 #[derive(Clone, Debug)]
-pub enum Literal {
-    Bool(bool),
-    Str(String),
-}
-
-#[derive(Clone, Debug)]
 enum PrimaryExpr {
     Paren(Box<Expression>),
-    Literal(Literal),
+    Literal(String),
     Obj(Vec<(String, Box<AssignExpr>)>),
     Var(String),
 }
@@ -27,7 +21,13 @@ enum CallExpr {
     Call(MemberExpr, Box<AssignExpr>),
 }
 type LHSExpr = CallExpr;
-type RelationalExpr = LHSExpr;
+
+#[derive(Clone, Debug)]
+enum UnaryExpr {
+    SUp(LHSExpr),
+    Minus(Box<UnaryExpr>),
+}
+type RelationalExpr = UnaryExpr;
 
 #[derive(Clone, Debug)]
 enum EqualityExpr {
@@ -79,8 +79,11 @@ impl PrimaryExpr {
     fn as_lhs(self) -> LHSExpr {
         self.as_member().sup()
     }
-    fn as_lor(self) -> LOrExpr {
+    fn as_rel(self) -> RelationalExpr {
         self.as_lhs().sup()
+    }
+    fn as_lor(self) -> LOrExpr {
+        self.as_rel().sup()
     }
     fn as_cond(self) -> ConditionalExpr {
         self.as_lor().sup()
@@ -119,9 +122,9 @@ impl MemberExpr {
         }
     }
 }
-impl RelationalExpr {
-    fn sup(self) -> EqualityExpr {
-        EqualityExpr::SR(self)
+impl CallExpr {
+    fn sup(self) -> UnaryExpr {
+        UnaryExpr::SUp(self)
     }
     fn expr(self) -> Expr {
         self.sup().expr()
@@ -141,6 +144,28 @@ impl RelationalExpr {
         }
     }
 }
+impl UnaryExpr {
+    fn sup(self) -> EqualityExpr {
+        EqualityExpr::SR(self)
+    }
+    fn expr(self) -> Expr {
+        self.sup().expr()
+    }
+    fn as_lhs(self) -> LHSExpr {
+        if let Self::SUp(s) = self {
+            s
+        } else {
+            parens(self.expr()).as_lhs()
+        }
+    }
+
+    fn first(&self) -> Token {
+        match self {
+            Self::SUp(s) => s.first(),
+            Self::Minus(e) => e.first(),
+        }
+    }
+}
 impl LOrExpr {
     fn sup(self) -> ConditionalExpr {
         ConditionalExpr::SLO(self)
@@ -148,11 +173,11 @@ impl LOrExpr {
     fn expr(self) -> Expr {
         self.sup().expr()
     }
-    fn as_lhs(self) -> LHSExpr {
+    fn as_rel(self) -> RelationalExpr {
         if let Self::SR(s) = self {
             s
         } else {
-            parens(self.expr()).as_lhs()
+            parens(self.expr()).as_rel()
         }
     }
 
@@ -231,8 +256,11 @@ impl Expr {
     fn as_lor(self) -> LOrExpr {
         self.as_cond().as_lor()
     }
+    fn as_rel(self) -> RelationalExpr {
+        self.as_lor().as_rel()
+    }
     fn as_lhs(self) -> LHSExpr {
-        self.as_lor().as_lhs()
+        self.as_rel().as_lhs()
     }
     fn as_member(self) -> MemberExpr {
         self.as_lhs().as_member()
@@ -253,14 +281,17 @@ pub fn call(lhs: Expr, rhs: Expr) -> Expr {
 pub fn comma_pair(lhs: Expr, rhs: Expr) -> Expr {
     Expression::Comma(Box::new(lhs.0), rhs.as_assign()).expr()
 }
+pub fn unary_minus(rhs: Expr) -> Expr {
+    UnaryExpr::Minus(Box::new(rhs.as_rel())).expr()
+}
 pub fn eqop(lhs: Expr, rhs: Expr) -> Expr {
-    EqualityExpr::EqOp(Box::new(lhs.as_lor()), rhs.as_lhs()).expr()
+    EqualityExpr::EqOp(Box::new(lhs.as_lor()), rhs.as_rel()).expr()
 }
 pub fn field(lhs: Expr, rhs: String) -> Expr {
     MemberExpr::Field(Box::new(lhs.as_member()), rhs).expr()
 }
-pub fn lit(v: Literal) -> Expr {
-    PrimaryExpr::Literal(v).expr()
+pub fn lit(code: String) -> Expr {
+    PrimaryExpr::Literal(code).expr()
 }
 pub fn ternary(cond: Expr, e1: Expr, e2: Expr) -> Expr {
     ConditionalExpr::Ternary(cond.as_lor(), Box::new(e1.as_assign()), Box::new(e2.as_assign())).expr()
@@ -304,18 +335,8 @@ impl PrimaryExpr {
                 e.write(out);
                 *out += ")";
             }
-            Self::Literal(v) => {
-                use Literal::*;
-                match v {
-                    Bool(true) => *out += "true",
-                    Bool(false) => *out += "false",
-                    Str(v) => {
-                        // TODO - escape strings
-                        *out += "'";
-                        *out += &v;
-                        *out += "'";
-                    }
-                }
+            Self::Literal(code) => {
+                *out += code;
             }
             Self::Obj(fields) => {
                 *out += "{";
@@ -355,6 +376,17 @@ impl CallExpr {
                 *out += "(";
                 rhs.write(out);
                 *out += ")";
+            }
+        }
+    }
+}
+impl UnaryExpr {
+    fn write(&self, out: &mut String) {
+        match self {
+            Self::SUp(e) => e.write(out),
+            Self::Minus(e) => {
+                *out += "-";
+                e.write(out);
             }
         }
     }

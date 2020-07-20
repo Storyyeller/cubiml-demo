@@ -23,6 +23,9 @@ impl error::Error for TypeError {}
 #[derive(Debug, Clone)]
 enum VTypeHead {
     VBool,
+    VFloat,
+    VInt,
+    VStr,
     VFunc { arg: Use, ret: Value },
     VObj { fields: HashMap<String, Value> },
     VCase { case: (String, Value) },
@@ -30,6 +33,9 @@ enum VTypeHead {
 #[derive(Debug, Clone)]
 enum UTypeHead {
     UBool,
+    UFloat,
+    UInt,
+    UStr,
     UFunc { arg: Value, ret: Use },
     UObj { field: (String, Use) },
     UCase { cases: HashMap<String, Use> },
@@ -41,6 +47,10 @@ fn check_heads(lhs: &VTypeHead, rhs: &UTypeHead, out: &mut Vec<(Value, Use)>) ->
 
     match (lhs, rhs) {
         (&VBool, &UBool) => Ok(()),
+        (&VFloat, &UFloat) => Ok(()),
+        (&VInt, &UInt) => Ok(()),
+        (&VStr, &UStr) => Ok(()),
+
         (&VFunc { arg: arg1, ret: ret1 }, &UFunc { arg: arg2, ret: ret2 }) => {
             out.push((ret1, ret2));
             // flip the order since arguments are contravariant
@@ -133,8 +143,27 @@ impl TypeCheckerCore {
     pub fn bool(&mut self) -> Value {
         self.new_val(VTypeHead::VBool)
     }
+    pub fn float(&mut self) -> Value {
+        self.new_val(VTypeHead::VFloat)
+    }
+    pub fn int(&mut self) -> Value {
+        self.new_val(VTypeHead::VInt)
+    }
+    pub fn str(&mut self) -> Value {
+        self.new_val(VTypeHead::VStr)
+    }
+
     pub fn bool_use(&mut self) -> Use {
         self.new_use(UTypeHead::UBool)
+    }
+    pub fn float_use(&mut self) -> Use {
+        self.new_use(UTypeHead::UFloat)
+    }
+    pub fn int_use(&mut self) -> Use {
+        self.new_use(UTypeHead::UInt)
+    }
+    pub fn str_use(&mut self) -> Use {
+        self.new_use(UTypeHead::UStr)
     }
 
     pub fn func(&mut self, arg: Use, ret: Value) -> Value {
