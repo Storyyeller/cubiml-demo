@@ -61,6 +61,25 @@ impl ModuleBuilder {
 
 fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
     match expr {
+        ast::Expr::BinOp(lhs_expr, rhs_expr, op_type, op) => {
+            let lhs = compile(ctx, lhs_expr);
+            let rhs = compile(ctx, rhs_expr);
+            let jsop = match op {
+                ast::Op::Add => js::Op::Add,
+                ast::Op::Sub => js::Op::Sub,
+                ast::Op::Mult => js::Op::Mult,
+                ast::Op::Div => js::Op::Div,
+
+                ast::Op::Lt => js::Op::Lt,
+                ast::Op::Lte => js::Op::Lte,
+                ast::Op::Gt => js::Op::Gt,
+                ast::Op::Gte => js::Op::Gte,
+
+                ast::Op::Eq => js::Op::Eq,
+                ast::Op::Neq => js::Op::Neq,
+            };
+            js::binop(lhs, rhs, jsop)
+        }
         ast::Expr::Call(func, arg) => {
             let lhs = compile(ctx, func);
             let rhs = compile(ctx, arg);
@@ -222,6 +241,15 @@ mod tests {
         assert_eq!(
             compile(&mut mb, &Expr::FieldAccess(intlit("-1"), "toString".to_string())).to_source(),
             "(-1n).toString"
+        );
+
+        assert_eq!(
+            compile(
+                &mut mb,
+                &Expr::BinOp(intlit("42"), intlit("-1"), ast::OpType::IntOp, ast::Op::Sub)
+            )
+            .to_source(),
+            "42n- -1n"
         );
     }
 }

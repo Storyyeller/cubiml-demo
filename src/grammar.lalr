@@ -99,6 +99,36 @@ LetRec: Box<ast::Expr> = {
 }
 
 
+MultOp: Box<ast::Expr> = {
+    <MultExpr> "*" <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Mult)),
+    <MultExpr> "/" <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Div)),
+    <MultExpr> "*." <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Mult)),
+    <MultExpr> "/." <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Div)),
+}
+AddOp: Box<ast::Expr> = {
+    <AddExpr> "+" <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Add)),
+    <AddExpr> "-" <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Sub)),
+    <AddExpr> "+." <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Add)),
+    <AddExpr> "-." <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Sub)),
+    <AddExpr> "^" <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::StrOp, ast::Op::Add)),
+}
+CmpOp: Box<ast::Expr> = {
+    <AddExpr> "<" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Lt)),
+    <AddExpr> "<=" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Lte)),
+    <AddExpr> ">" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Gt)),
+    <AddExpr> ">=" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Gte)),
+
+    <AddExpr> "<." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Lt)),
+    <AddExpr> "<=." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Lte)),
+    <AddExpr> ">." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Gt)),
+    <AddExpr> ">=." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Gte)),
+
+    <AddExpr> "==" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::AnyCmp, ast::Op::Eq)),
+    <AddExpr> "!=" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::AnyCmp, ast::Op::Neq)),
+}
+
+
+
 SimpleExpr = {
     FieldAccess,
     Record,
@@ -113,8 +143,20 @@ CallExpr = {
     CaseExpr,
     Call,
 }
-Expr = {
+MultExpr = {
     CallExpr,
+    MultOp,
+}
+AddExpr = {
+    MultExpr,
+    AddOp,
+}
+CompareExpr = {
+    AddExpr,
+    CmpOp,
+}
+Expr = {
+    CompareExpr,
     FuncDef,
     If,
     Let,

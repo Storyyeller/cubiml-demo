@@ -7,9 +7,9 @@ You can try out cubiml online in your browser at https://storyyeller.github.io/c
 
 ## A quick tour of cubiml
 
-#### Booleans and conditionals
+#### Conditionals
 
-In cubiml `if` is an expression, not a statement. The general form is `if <expr> then <expr> else <expr>` where the `<expr>`s are sub-expressions. The first expression is evaluated, and depending on whether it is true or false, one of the other two subexpressions is evaluated, and the result of the `if` expression is that expression's value. For example, evaluating `if false then "Hello" else "World"` would result in `"World"`. (The initial version of cubiml doesn't have strings or numbers - but the examples here use them anyway for the sake of demonstration). You can think of this as similar to the ternary operator (`a ? b : c`) present in some programming languages.
+In cubiml `if` is an expression, not a statement. The general form is `if <expr> then <expr> else <expr>` where the `<expr>`s are sub-expressions. The first expression is evaluated, and depending on whether it is true or false, one of the other two subexpressions is evaluated, and the result of the `if` expression is that expression's value. For example, evaluating `if false then "Hello" else "World"` would result in `"World"`. You can think of this as similar to the ternary operator (`a ? b : c`) present in some programming languages.
 
 #### Records and fields
 
@@ -123,8 +123,8 @@ In order to avoid code referring to variables that don't exist yet, the right ha
 The above syntax works for a single function that refers to itself, but in some cases, you may want to have multiple functions that each refer to each other. Unlike in the case with `let`, simply nesting `let rec`s won't work. Therefore, `let rec` allows _multiple_ variable bindings, seperated by `and`. For example, you can define mutually recursive `even` and `odd` functions as follows:
 
 ```ocaml
-let rec even = fun x -> if x == 0 then true else odd(x-1)
-    and odd = fun x -> if x == 0 then false else even(x-1)
+let rec even = fun x -> if x == 0 then true else odd(x - 1)
+    and odd = fun x -> if x == 0 then false else even(x - 1)
 ```
 
 #### Case types and matching
@@ -149,6 +149,41 @@ calculate_area `Rectangle {height=1.1; length=2.2}
 
 Notice that within the Circle branch, the code can access the rad field, and within the Rectangle branch, it can access the length and height field. Case types and matches let you essentially "unmix" distinct data types after they are mixed together in the program flow. Without case types, this would be impossible to do in a type safe manner.
 
+
+#### Literals 
+
+Cubiml has boolean, int, float, and string literals. Integers are arbitrary precision and can't have leading zeros. Floating point literals must contain a decimal point, but the fraction part is optional. Strings are double quoted and use backslash escapes.
+
+```ocaml
+true;
+false;
+0;
+-213132;
+999999999999999999999999999999999999999999999999;
+8.213;
+-1.;
+-0.01e33;
+7.e-77;
+"";
+"Hello world!";
+"Quote -> \" backslash -> \\ Single quote -> \'"
+```
+
+#### Operators
+
+Use `+, -, *, /` for integer math and `<, <=, >, >=` for integer comparisons. For floating point math and comparisons, add a `.` to the end of the operator, e.g. `7.5 /. 12.0`. String concatenation is `^`. `==` and `!=` compare values of any type (values of different types compare unequal).
+
+```ocaml
+5 * 2 + 1;
+-1 <= 0;
+7.5 /. 12.0;
+0.0 <=. 0.1;
+9 == "what?";
+"Hello," ^ " World!";
+"" != {}
+```
+
+
 ## Building cubiml from source
 
 You will need to have lalrpop and wasm-pack installed. First, generate the parser code
@@ -158,4 +193,3 @@ You will need to have lalrpop and wasm-pack installed. First, generate the parse
 Then build the wasm module and js wrapper with wasm-pack
 
     wasm-pack build --target web
-

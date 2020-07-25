@@ -6,11 +6,39 @@ pub enum Literal {
     Str,
 }
 
+#[derive(Debug)]
+pub enum Op {
+    Add,
+    Sub,
+    Mult,
+    Div,
+
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+
+    Eq,
+    Neq,
+}
+
+#[derive(Debug)]
+pub enum OpType {
+    IntOp,
+    FloatOp,
+    StrOp,
+
+    IntCmp,
+    FloatCmp,
+    AnyCmp,
+}
+
 type VarDefinition = (String, Box<Expr>);
 type CaseMatchPattern = (String, String);
 
 #[derive(Debug)]
 pub enum Expr {
+    BinOp(Box<Expr>, Box<Expr>, OpType, Op),
     Call(Box<Expr>, Box<Expr>),
     Case(String, Box<Expr>),
     FieldAccess(Box<Expr>, String),

@@ -1,17 +1,27 @@
 #![allow(dead_code)]
-#![allow(clippy::wrong_self_convention)]
 
+#[derive(Debug, Clone, Copy)]
+pub enum Op {
+    Add,
+    Sub,
+    Mult,
+    Div,
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Token {
-    OTHER,
-    BRACE,
-    PAREN,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+
+    Eq,
+    Neq,
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 pub fn assign(lhs: Expr, rhs: Expr) -> Expr {
     Expr(Expr2::Assignment(lhs.0.into(), rhs.0.into()))
+}
+pub fn binop(lhs: Expr, rhs: Expr, op: Op) -> Expr {
+    Expr(Expr2::BinOp(lhs.0.into(), rhs.0.into(), op))
 }
 pub fn call(lhs: Expr, rhs: Expr) -> Expr {
     Expr(Expr2::Call(lhs.0.into(), rhs.0.into()))
@@ -23,7 +33,7 @@ pub fn unary_minus(rhs: Expr) -> Expr {
     Expr(Expr2::Minus(rhs.0.into()))
 }
 pub fn eqop(lhs: Expr, rhs: Expr) -> Expr {
-    Expr(Expr2::EqOp(lhs.0.into(), rhs.0.into()))
+    Expr(Expr2::BinOp(lhs.0.into(), rhs.0.into(), Op::Eq))
 }
 pub fn field(lhs: Expr, rhs: String) -> Expr {
     Expr(Expr2::Field(lhs.0.into(), rhs))
@@ -80,6 +90,13 @@ impl Expr {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Token {
+    OTHER,
+    BRACE,
+    PAREN,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Precedence {
     PRIMARY = 0,
@@ -87,6 +104,10 @@ enum Precedence {
     CALL,
     LHS,
     UNARY,
+    EXPONENT,
+    MULTIPLICATIVE,
+    ADDITIVE,
+    SHIFT,
     RELATIONAL,
     EQUALITY,
     LOR,
@@ -108,7 +129,7 @@ enum Expr2 {
 
     Minus(Box<Expr2>),
 
-    EqOp(Box<Expr2>, Box<Expr2>),
+    BinOp(Box<Expr2>, Box<Expr2>, Op),
 
     Ternary(Box<Expr2>, Box<Expr2>, Box<Expr2>),
 
@@ -120,6 +141,7 @@ enum Expr2 {
 impl Expr2 {
     fn precedence(&self) -> Precedence {
         use Expr2::*;
+        use Op::*;
         use Precedence::*;
         match self {
             Paren(..) => PRIMARY,
@@ -129,7 +151,12 @@ impl Expr2 {
             Field(..) => MEMBER,
             Call(..) => CALL,
             Minus(..) => UNARY,
-            EqOp(..) => EQUALITY,
+            BinOp(_, _, op) => match op {
+                Mult | Div => MULTIPLICATIVE,
+                Add | Sub => ADDITIVE,
+                Lt | Lte | Gt | Gte => RELATIONAL,
+                Eq | Neq => EQUALITY,
+            },
             Ternary(..) => CONDITIONAL,
             Assignment(..) => ASSIGN,
             ArrowFunc(..) => ASSIGN,
@@ -148,7 +175,7 @@ impl Expr2 {
             Field(lhs, ..) => lhs.first(),
             Call(lhs, ..) => lhs.first(),
             Minus(..) => OTHER,
-            EqOp(lhs, ..) => lhs.first(),
+            BinOp(lhs, ..) => lhs.first(),
             Ternary(lhs, ..) => lhs.first(),
             Assignment(lhs, ..) => lhs.first(),
             ArrowFunc(..) => PAREN,
@@ -195,9 +222,25 @@ impl Expr2 {
                 *out += "-";
                 e.write(out);
             }
-            Self::EqOp(lhs, rhs) => {
+            Self::BinOp(lhs, rhs, op) => {
+                use Op::*;
+                let opstr = match op {
+                    Add => "+",
+                    Sub => "- ",
+                    Mult => "*",
+                    Div => "/",
+
+                    Lt => "<",
+                    Lte => "<=",
+                    Gt => ">",
+                    Gte => ">=",
+
+                    Eq => "===",
+                    Neq => "!==",
+                };
+
                 lhs.write(out);
-                *out += " === ";
+                *out += opstr;
                 rhs.write(out);
             }
             Self::Ternary(cond, e1, e2) => {
@@ -269,11 +312,19 @@ impl Expr2 {
                 e.add_parens();
                 e.ensure(UNARY);
             }
-            Self::EqOp(lhs, rhs) => {
+            Self::BinOp(lhs, rhs, op) => {
+                use Op::*;
+                let req = match op {
+                    Mult | Div => (MULTIPLICATIVE, EXPONENT),
+                    Add | Sub => (ADDITIVE, MULTIPLICATIVE),
+                    Lt | Lte | Gt | Gte => (RELATIONAL, SHIFT),
+                    Eq | Neq => (EQUALITY, RELATIONAL),
+                };
+
                 lhs.add_parens();
-                lhs.ensure(EQUALITY);
+                lhs.ensure(req.0);
                 rhs.add_parens();
-                rhs.ensure(RELATIONAL);
+                rhs.ensure(req.1);
             }
             Self::Ternary(cond, e1, e2) => {
                 cond.add_parens();

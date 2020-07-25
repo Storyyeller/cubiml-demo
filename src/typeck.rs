@@ -58,6 +58,46 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
     use ast::Expr::*;
 
     match expr {
+        BinOp(lhs_expr, rhs_expr, op_type, op) => {
+            use ast::OpType::*;
+
+            let lhs_type = check_expr(engine, bindings, lhs_expr)?;
+            let rhs_type = check_expr(engine, bindings, rhs_expr)?;
+
+            Ok(match op_type {
+                IntOp => {
+                    let bound = engine.int_use();
+                    engine.flow(lhs_type, bound)?;
+                    engine.flow(rhs_type, bound)?;
+                    engine.int()
+                }
+                FloatOp => {
+                    let bound = engine.float_use();
+                    engine.flow(lhs_type, bound)?;
+                    engine.flow(rhs_type, bound)?;
+                    engine.float()
+                }
+                StrOp => {
+                    let bound = engine.str_use();
+                    engine.flow(lhs_type, bound)?;
+                    engine.flow(rhs_type, bound)?;
+                    engine.str()
+                }
+                IntCmp => {
+                    let bound = engine.int_use();
+                    engine.flow(lhs_type, bound)?;
+                    engine.flow(rhs_type, bound)?;
+                    engine.bool()
+                }
+                FloatCmp => {
+                    let bound = engine.float_use();
+                    engine.flow(lhs_type, bound)?;
+                    engine.flow(rhs_type, bound)?;
+                    engine.bool()
+                }
+                AnyCmp => engine.bool(),
+            })
+        }
         Call(func_expr, arg_expr) => {
             let func_type = check_expr(engine, bindings, func_expr)?;
             let arg_type = check_expr(engine, bindings, arg_expr)?;
