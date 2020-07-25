@@ -1,62 +1,6 @@
 #![allow(dead_code)]
 #![allow(clippy::wrong_self_convention)]
 
-#[derive(Clone, Debug)]
-enum PrimaryExpr {
-    Paren(Box<Expression>),
-    Literal(String),
-    Obj(Vec<(String, Box<AssignExpr>)>),
-    Var(String),
-}
-
-#[derive(Clone, Debug)]
-enum MemberExpr {
-    SP(PrimaryExpr),
-    Field(Box<MemberExpr>, String),
-}
-
-#[derive(Clone, Debug)]
-enum CallExpr {
-    SM(MemberExpr),
-    Call(MemberExpr, Box<AssignExpr>),
-}
-type LHSExpr = CallExpr;
-
-#[derive(Clone, Debug)]
-enum UnaryExpr {
-    SUp(LHSExpr),
-    Minus(Box<UnaryExpr>),
-}
-type RelationalExpr = UnaryExpr;
-
-#[derive(Clone, Debug)]
-enum EqualityExpr {
-    SR(RelationalExpr),
-    EqOp(Box<EqualityExpr>, RelationalExpr),
-}
-type LOrExpr = EqualityExpr;
-
-#[derive(Clone, Debug)]
-enum ConditionalExpr {
-    SLO(LOrExpr),
-    Ternary(LOrExpr, Box<AssignExpr>, Box<AssignExpr>),
-}
-
-#[derive(Clone, Debug)]
-enum AssignExpr {
-    SC(ConditionalExpr),
-    Assignment(LHSExpr, Box<AssignExpr>),
-    ArrowFunc(String, String, Box<AssignExpr>),
-}
-
-#[derive(Clone, Debug)]
-enum Expression {
-    SA(AssignExpr),
-    Comma(Box<Expression>, AssignExpr),
-}
-
-#[derive(Clone, Debug)]
-pub struct Expr(Expression);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Token {
@@ -65,239 +9,33 @@ enum Token {
     PAREN,
 }
 
-impl PrimaryExpr {
-    fn sup(self) -> MemberExpr {
-        MemberExpr::SP(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-
-    fn as_member(self) -> MemberExpr {
-        self.sup()
-    }
-    fn as_lhs(self) -> LHSExpr {
-        self.as_member().sup()
-    }
-    fn as_rel(self) -> RelationalExpr {
-        self.as_lhs().sup()
-    }
-    fn as_lor(self) -> LOrExpr {
-        self.as_rel().sup()
-    }
-    fn as_cond(self) -> ConditionalExpr {
-        self.as_lor().sup()
-    }
-    fn as_assign(self) -> AssignExpr {
-        self.as_cond().sup()
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::Obj(..) => Token::BRACE,
-            Self::Paren(..) => Token::PAREN,
-            _ => Token::OTHER,
-        }
-    }
-}
-impl MemberExpr {
-    fn sup(self) -> CallExpr {
-        CallExpr::SM(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-    fn as_primary(self) -> PrimaryExpr {
-        if let Self::SP(s) = self {
-            s
-        } else {
-            parens(self.expr())
-        }
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::SP(s) => s.first(),
-            Self::Field(lhs, ..) => lhs.first(),
-        }
-    }
-}
-impl CallExpr {
-    fn sup(self) -> UnaryExpr {
-        UnaryExpr::SUp(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-    fn as_member(self) -> MemberExpr {
-        if let Self::SM(s) = self {
-            s
-        } else {
-            parens(self.expr()).as_member()
-        }
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::SM(s) => s.first(),
-            Self::Call(lhs, ..) => lhs.first(),
-        }
-    }
-}
-impl UnaryExpr {
-    fn sup(self) -> EqualityExpr {
-        EqualityExpr::SR(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-    fn as_lhs(self) -> LHSExpr {
-        if let Self::SUp(s) = self {
-            s
-        } else {
-            parens(self.expr()).as_lhs()
-        }
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::SUp(s) => s.first(),
-            Self::Minus(e) => e.first(),
-        }
-    }
-}
-impl LOrExpr {
-    fn sup(self) -> ConditionalExpr {
-        ConditionalExpr::SLO(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-    fn as_rel(self) -> RelationalExpr {
-        if let Self::SR(s) = self {
-            s
-        } else {
-            parens(self.expr()).as_rel()
-        }
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::SR(s) => s.first(),
-            Self::EqOp(lhs, ..) => lhs.first(),
-        }
-    }
-}
-impl ConditionalExpr {
-    fn sup(self) -> AssignExpr {
-        AssignExpr::SC(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-    fn as_lor(self) -> LOrExpr {
-        if let Self::SLO(s) = self {
-            s
-        } else {
-            parens(self.expr()).as_lor()
-        }
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::SLO(s) => s.first(),
-            Self::Ternary(lhs, ..) => lhs.first(),
-        }
-    }
-}
-impl AssignExpr {
-    fn sup(self) -> Expression {
-        Expression::SA(self)
-    }
-    fn expr(self) -> Expr {
-        self.sup().expr()
-    }
-    fn as_cond(self) -> ConditionalExpr {
-        if let Self::SC(s) = self {
-            s
-        } else {
-            parens(self.expr()).as_cond()
-        }
-    }
-
-    fn first(&self) -> Token {
-        match self {
-            Self::SC(s) => s.first(),
-            Self::Assignment(lhs, ..) => lhs.first(),
-            Self::ArrowFunc(..) => Token::PAREN,
-        }
-    }
-}
-impl Expression {
-    fn expr(self) -> Expr {
-        Expr(self)
-    }
-    fn as_assign(self) -> AssignExpr {
-        if let Self::SA(s) = self {
-            s
-        } else {
-            parens(self.expr()).as_assign()
-        }
-    }
-}
-
-impl Expr {
-    fn as_assign(self) -> AssignExpr {
-        self.0.as_assign()
-    }
-    fn as_cond(self) -> ConditionalExpr {
-        self.as_assign().as_cond()
-    }
-    fn as_lor(self) -> LOrExpr {
-        self.as_cond().as_lor()
-    }
-    fn as_rel(self) -> RelationalExpr {
-        self.as_lor().as_rel()
-    }
-    fn as_lhs(self) -> LHSExpr {
-        self.as_rel().as_lhs()
-    }
-    fn as_member(self) -> MemberExpr {
-        self.as_lhs().as_member()
-    }
-}
-
 /////////////////////////////////////////////////////////////////////////////////////////////
-fn parens(e: Expr) -> PrimaryExpr {
-    PrimaryExpr::Paren(Box::new(e.0))
-}
-
 pub fn assign(lhs: Expr, rhs: Expr) -> Expr {
-    AssignExpr::Assignment(lhs.as_lhs(), Box::new(rhs.as_assign())).expr()
+    Expr(Expr2::Assignment(lhs.0.into(), rhs.0.into()))
 }
 pub fn call(lhs: Expr, rhs: Expr) -> Expr {
-    CallExpr::Call(lhs.as_member(), Box::new(rhs.as_assign())).expr()
+    Expr(Expr2::Call(lhs.0.into(), rhs.0.into()))
 }
 pub fn comma_pair(lhs: Expr, rhs: Expr) -> Expr {
-    Expression::Comma(Box::new(lhs.0), rhs.as_assign()).expr()
+    Expr(Expr2::Comma(lhs.0.into(), rhs.0.into()))
 }
 pub fn unary_minus(rhs: Expr) -> Expr {
-    UnaryExpr::Minus(Box::new(rhs.as_rel())).expr()
+    Expr(Expr2::Minus(rhs.0.into()))
 }
 pub fn eqop(lhs: Expr, rhs: Expr) -> Expr {
-    EqualityExpr::EqOp(Box::new(lhs.as_lor()), rhs.as_rel()).expr()
+    Expr(Expr2::EqOp(lhs.0.into(), rhs.0.into()))
 }
 pub fn field(lhs: Expr, rhs: String) -> Expr {
-    MemberExpr::Field(Box::new(lhs.as_member()), rhs).expr()
+    Expr(Expr2::Field(lhs.0.into(), rhs))
 }
 pub fn lit(code: String) -> Expr {
-    PrimaryExpr::Literal(code).expr()
+    Expr(Expr2::Literal(code))
 }
 pub fn ternary(cond: Expr, e1: Expr, e2: Expr) -> Expr {
-    ConditionalExpr::Ternary(cond.as_lor(), Box::new(e1.as_assign()), Box::new(e2.as_assign())).expr()
+    Expr(Expr2::Ternary(cond.0.into(), e1.0.into(), e2.0.into()))
 }
 pub fn var(s: String) -> Expr {
-    PrimaryExpr::Var(s).expr()
+    Expr(Expr2::Var(s))
 }
 
 pub fn comma_list(mut exprs: Vec<Expr>) -> Expr {
@@ -305,29 +43,119 @@ pub fn comma_list(mut exprs: Vec<Expr>) -> Expr {
     exprs.reverse();
     let mut res = exprs.pop().unwrap().0;
     while let Some(expr) = exprs.pop() {
-        res = Expression::Comma(Box::new(res), expr.as_assign());
+        res = Expr2::Comma(Box::new(res), expr.0.into());
     }
-    res.expr()
+    Expr(res)
 }
 
 pub fn func(arg: String, scope: String, body: Expr) -> Expr {
-    let mut body = body.as_assign();
+    let mut body = body.0;
 
     // body can't be an expression starting with "{"
     if body.first() == Token::BRACE {
-        body = parens(body.expr()).as_assign();
+        body.wrap_in_parens();
     }
 
-    AssignExpr::ArrowFunc(arg, scope, Box::new(body)).expr()
+    Expr(Expr2::ArrowFunc(arg, scope, Box::new(body)))
 }
 
 pub fn obj(fields: Vec<(String, Expr)>) -> Expr {
-    let fields = fields.into_iter().map(|(k, v)| (k, Box::new(v.as_assign()))).collect();
-    PrimaryExpr::Obj(fields).expr()
+    let fields = fields.into_iter().map(|(k, v)| (k, v.0.into())).collect();
+    Expr(Expr2::Obj(fields))
 }
-/////////////////////////////////////////////////////////////////////////////////////////////
 
-impl PrimaryExpr {
+#[derive(Clone, Debug)]
+pub struct Expr(Expr2);
+impl Expr {
+    // pub fn add_parens(&mut self) {
+    //     self.0.add_parens();
+    // }
+
+    pub fn to_source(mut self) -> String {
+        self.0.add_parens();
+
+        let mut s = "".to_string();
+        self.0.write(&mut s);
+        s
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Precedence {
+    PRIMARY = 0,
+    MEMBER,
+    CALL,
+    LHS,
+    UNARY,
+    RELATIONAL,
+    EQUALITY,
+    LOR,
+    CONDITIONAL,
+    ASSIGN,
+    EXPR,
+}
+
+#[derive(Clone, Debug)]
+enum Expr2 {
+    Paren(Box<Expr2>),
+    Literal(String),
+    Obj(Vec<(String, Box<Expr2>)>),
+    Var(String),
+
+    Field(Box<Expr2>, String),
+
+    Call(Box<Expr2>, Box<Expr2>),
+
+    Minus(Box<Expr2>),
+
+    EqOp(Box<Expr2>, Box<Expr2>),
+
+    Ternary(Box<Expr2>, Box<Expr2>, Box<Expr2>),
+
+    Assignment(Box<Expr2>, Box<Expr2>),
+    ArrowFunc(String, String, Box<Expr2>),
+
+    Comma(Box<Expr2>, Box<Expr2>),
+}
+impl Expr2 {
+    fn precedence(&self) -> Precedence {
+        use Expr2::*;
+        use Precedence::*;
+        match self {
+            Paren(..) => PRIMARY,
+            Literal(..) => PRIMARY,
+            Obj(..) => PRIMARY,
+            Var(..) => PRIMARY,
+            Field(..) => MEMBER,
+            Call(..) => CALL,
+            Minus(..) => UNARY,
+            EqOp(..) => EQUALITY,
+            Ternary(..) => CONDITIONAL,
+            Assignment(..) => ASSIGN,
+            ArrowFunc(..) => ASSIGN,
+            Comma(..) => EXPR,
+        }
+    }
+
+    fn first(&self) -> Token {
+        use Expr2::*;
+        use Token::*;
+        match self {
+            Paren(..) => PAREN,
+            Literal(..) => OTHER,
+            Obj(..) => BRACE,
+            Var(..) => OTHER,
+            Field(lhs, ..) => lhs.first(),
+            Call(lhs, ..) => lhs.first(),
+            Minus(..) => OTHER,
+            EqOp(lhs, ..) => lhs.first(),
+            Ternary(lhs, ..) => lhs.first(),
+            Assignment(lhs, ..) => lhs.first(),
+            ArrowFunc(..) => PAREN,
+            Comma(lhs, ..) => lhs.first(),
+        }
+    }
+
     fn write(&self, out: &mut String) {
         match self {
             Self::Paren(e) => {
@@ -352,61 +180,26 @@ impl PrimaryExpr {
             Self::Var(name) => {
                 *out += name;
             }
-        }
-    }
-}
-impl MemberExpr {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SP(e) => e.write(out),
             Self::Field(lhs, rhs) => {
                 lhs.write(out);
                 *out += ".";
                 *out += rhs;
             }
-        }
-    }
-}
-impl CallExpr {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SM(e) => e.write(out),
             Self::Call(lhs, rhs) => {
                 lhs.write(out);
                 *out += "(";
                 rhs.write(out);
                 *out += ")";
             }
-        }
-    }
-}
-impl UnaryExpr {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SUp(e) => e.write(out),
             Self::Minus(e) => {
                 *out += "-";
                 e.write(out);
             }
-        }
-    }
-}
-impl EqualityExpr {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SR(e) => e.write(out),
             Self::EqOp(lhs, rhs) => {
                 lhs.write(out);
                 *out += " === ";
                 rhs.write(out);
             }
-        }
-    }
-}
-impl ConditionalExpr {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SLO(e) => e.write(out),
             Self::Ternary(cond, e1, e2) => {
                 cond.write(out);
                 *out += " ? ";
@@ -414,13 +207,6 @@ impl ConditionalExpr {
                 *out += " : ";
                 e2.write(out);
             }
-        }
-    }
-}
-impl AssignExpr {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SC(e) => e.write(out),
             Self::Assignment(lhs, rhs) => {
                 lhs.write(out);
                 *out += " = ";
@@ -434,13 +220,6 @@ impl AssignExpr {
                 *out += "={}) => ";
                 body.write(out);
             }
-        }
-    }
-}
-impl Expression {
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::SA(e) => e.write(out),
             Self::Comma(lhs, rhs) => {
                 lhs.write(out);
                 *out += ", ";
@@ -448,11 +227,80 @@ impl Expression {
             }
         }
     }
-}
-impl Expr {
-    pub fn to_source(&self) -> String {
-        let mut s = "".to_string();
-        self.0.write(&mut s);
-        s
+
+    fn wrap_in_parens(&mut self) {
+        use Expr2::*;
+        let dummy = Literal("".to_string());
+        let temp = std::mem::replace(self, dummy);
+        std::mem::replace(self, Paren(Box::new(temp)));
+    }
+
+    fn ensure(&mut self, required: Precedence) {
+        if self.precedence() > required {
+            self.wrap_in_parens();
+        }
+    }
+
+    fn add_parens(&mut self) {
+        use Precedence::*;
+        match self {
+            Self::Paren(e) => {
+                e.add_parens();
+            }
+            Self::Literal(code) => {}
+            Self::Obj(fields) => {
+                for (name, val) in fields {
+                    val.add_parens();
+                    val.ensure(ASSIGN);
+                }
+            }
+            Self::Var(name) => {}
+            Self::Field(lhs, rhs) => {
+                lhs.add_parens();
+                lhs.ensure(MEMBER);
+            }
+            Self::Call(lhs, rhs) => {
+                lhs.add_parens();
+                lhs.ensure(MEMBER);
+                rhs.add_parens();
+                rhs.ensure(ASSIGN);
+            }
+            Self::Minus(e) => {
+                e.add_parens();
+                e.ensure(UNARY);
+            }
+            Self::EqOp(lhs, rhs) => {
+                lhs.add_parens();
+                lhs.ensure(EQUALITY);
+                rhs.add_parens();
+                rhs.ensure(RELATIONAL);
+            }
+            Self::Ternary(cond, e1, e2) => {
+                cond.add_parens();
+                e1.add_parens();
+                e1.ensure(ASSIGN);
+                e2.add_parens();
+                e2.ensure(ASSIGN);
+            }
+            Self::Assignment(lhs, rhs) => {
+                lhs.add_parens();
+                lhs.ensure(LHS);
+                rhs.add_parens();
+                rhs.ensure(ASSIGN);
+            }
+            Self::ArrowFunc(arg, scope_arg, body) => {
+                body.add_parens();
+                body.ensure(ASSIGN);
+                // body can't be an expression starting with "{"
+                if body.first() == Token::BRACE {
+                    body.wrap_in_parens();
+                }
+            }
+            Self::Comma(lhs, rhs) => {
+                lhs.add_parens();
+                rhs.add_parens();
+                rhs.ensure(ASSIGN);
+            }
+        }
     }
 }
