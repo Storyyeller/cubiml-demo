@@ -10,9 +10,9 @@ const mod_promise = import('./pkg/cubiml_demo.js').then(
 const HTML = `
 <style>
     #container {
-        width: 50em;
-        height: 25em;
+        height: 32em;
         position: relative;
+        font: medium monospace;
     }
     #container.loading {
         opacity: 85%;
@@ -168,9 +168,12 @@ function initializeRepl(root, compiler, Printer) {
 
     function processCode(script) {
         const [success, res] = execCode(script);
-        addOutput(res, success ? 'success' : 'error').scrollIntoView(false);
+        addOutput(res, success ? 'success' : 'error');
+        // scroll output window to the bottom
+        output.scrollTop = output.scrollHeight;
         return success;
     }
+
 
     function processReplInput(line) {
         line = line.trim();
