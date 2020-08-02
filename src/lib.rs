@@ -8,6 +8,7 @@ mod core;
 mod grammar;
 mod js;
 mod reachability;
+mod spans;
 mod typeck;
 mod utils;
 
@@ -20,28 +21,41 @@ use lalrpop_util::ParseError;
 
 use self::codegen::ModuleBuilder;
 use self::grammar::ScriptParser;
+use self::spans::{SpanMaker, SpanManager, SpannedError};
 use self::typeck::TypeckState;
 
-fn format_parse_error<T: Display>(e: ParseError<usize, T, &'static str>) -> String {
+fn convert_parse_error<T: Display>(mut sm: SpanMaker, e: ParseError<usize, T, &'static str>) -> SpannedError {
     match e {
-        ParseError::InvalidToken { location } => format!("Invalid token at position {}", location),
-        ParseError::UnrecognizedEOF { expected, .. } => {
-            format!("Unexpected end of input.\nExpected tokens: [{}]", expected.join(", "))
+        ParseError::InvalidToken { location } => {
+            SpannedError::new1("SyntaxError: Invalid token", sm.span(location, location))
         }
-        ParseError::UnrecognizedToken { token, expected } => format!(
-            "Unexpected token {} at position {}.\nExpected tokens: [{}]",
-            token.1,
-            token.0,
-            expected.join(", ")
+        ParseError::UnrecognizedEOF { location, expected } => SpannedError::new1(
+            format!(
+                "SyntaxError: Unexpected end of input.\nNote: expected tokens: [{}]\nParse error occurred here:",
+                expected.join(", ")
+            ),
+            sm.span(location, location),
         ),
-        ParseError::ExtraToken { token } => format!("Unexpected extra token {}", token.1),
-        ParseError::User { error: msg } => msg.to_string(),
+        ParseError::UnrecognizedToken { token, expected } => SpannedError::new1(
+            format!(
+                "SyntaxError: Unexpected token {}\nNote: expected tokens: [{}]\nParse error occurred here:",
+                token.1,
+                expected.join(", ")
+            ),
+            sm.span(token.0, token.2),
+        ),
+        ParseError::ExtraToken { token } => {
+            SpannedError::new1("SyntaxError: Unexpected extra token", sm.span(token.0, token.2))
+        }
+        ParseError::User { error: msg } => unreachable!(),
     }
 }
 
 #[wasm_bindgen]
 pub struct State {
     parser: ScriptParser,
+    spans: SpanManager,
+
     checker: TypeckState,
     compiler: ModuleBuilder,
 
@@ -53,6 +67,8 @@ impl State {
     pub fn new() -> Self {
         State {
             parser: ScriptParser::new(),
+            spans: SpanManager::default(),
+
             checker: TypeckState::new(),
             compiler: ModuleBuilder::new(),
 
@@ -61,9 +77,14 @@ impl State {
         }
     }
 
-    fn process_sub(&mut self, source: &str) -> Result<String, String> {
-        let ast = self.parser.parse(source).map_err(format_parse_error)?;
-        let _t = self.checker.check_script(&ast).map_err(|e| format!("{}", e))?;
+    fn process_sub(&mut self, source: &str) -> Result<String, SpannedError> {
+        let mut span_maker = self.spans.add_source(source.to_owned());
+
+        let ast = self
+            .parser
+            .parse(&mut span_maker, source)
+            .map_err(|e| convert_parse_error(span_maker, e))?;
+        let _t = self.checker.check_script(&ast)?;
         let js_ast = self.compiler.compile_script(&ast);
         Ok(js_ast.to_source())
     }
@@ -76,7 +97,7 @@ impl State {
                 true
             }
             Err(e) => {
-                self.err = Some(e);
+                self.err = Some(e.print(&self.spans));
                 false
             }
         }

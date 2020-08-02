@@ -1,7 +1,8 @@
 use super::ast; // super instead of self because lalrpop wraps this in an internal module
+use super::spans;
 
 
-grammar;
+grammar(ctx: &mut spans::SpanMaker<'input>);
 
 Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z]\w*"> => String::from(<>);
@@ -28,53 +29,66 @@ SepListOpt<T, Sep>: Vec<T> = {
     => Vec::new(),
 };
 
+Spanned<T>: spans::Spanned<T> = {
+    <l: @L> <val: T> <r: @R> => (val, ctx.span(l, r))
+};
+
 VarOrLiteral: Box<ast::Expr> = {
-    Ident => Box::new(
-        match <>.as_str() {
+    Spanned<Ident> => Box::new(
+        match <>.0.as_str() {
             "false" | "true" => ast::Expr::Literal(ast::Literal::Bool, <>),
             _ => ast::Expr::Variable(<>)
         }
     ),
 
-    FloatLiteral => Box::new(ast::Expr::Literal(ast::Literal::Float, <>)),
-    IntLiteral => Box::new(ast::Expr::Literal(ast::Literal::Int, <>)),
-    StringLiteral => Box::new(ast::Expr::Literal(ast::Literal::Str, <>)),
+    Spanned<FloatLiteral> => Box::new(ast::Expr::Literal(ast::Literal::Float, <>)),
+    Spanned<IntLiteral> => Box::new(ast::Expr::Literal(ast::Literal::Int, <>)),
+    Spanned<StringLiteral> => Box::new(ast::Expr::Literal(ast::Literal::Str, <>)),
 }
 
 If: Box<ast::Expr> = {
-    "if" <Expr> "then" <Expr> "else" <Expr> => Box::new(ast::Expr::If(<>)),
+    "if" <Spanned<Expr>> "then" <Expr> "else" <Expr> => Box::new(ast::Expr::If(<>)),
 }
 
+FuncSub = "fun" <Ident> "->" <Expr>;
 FuncDef: Box<ast::Expr> = {
-    "fun" <Ident> "->" <Expr> => Box::new(ast::Expr::FuncDef(<>)),
+    Spanned<FuncSub> => Box::new(ast::Expr::FuncDef(<>)),
 }
 Call: Box<ast::Expr> = {
-    CallExpr CaseExpr => Box::new(ast::Expr::Call(<>)),
+    Spanned<CallExpr> CaseExpr => {
+        let ((lhs, span), rhs) = (<>);
+        Box::new(ast::Expr::Call(lhs, rhs, span))
+    }
 }
 
 
 KeyPairExpr = {
-    <Ident> "=" <Expr>,
+    <Spanned<Ident>> "=" <Expr>,
 }
+RecordSub = "{" <SepListOpt<KeyPairExpr, ";">> "}";
 Record: Box<ast::Expr> = {
-    "{" <SepListOpt<KeyPairExpr, ";">> "}" => Box::new(ast::Expr::Record(<>)),
+    Spanned<RecordSub> => Box::new(ast::Expr::Record(<>)),
 }
 FieldAccess: Box<ast::Expr> = {
-    <SimpleExpr> "." <Ident> => Box::new(ast::Expr::FieldAccess(<>)),
+    <lhs: SimpleExpr> <rhs: Spanned<("." Ident)>> => Box::new(ast::Expr::FieldAccess(lhs, (rhs.0).1, rhs.1)),
 }
 
 Case: Box<ast::Expr> = {
-    <Tag> <CaseExpr> => Box::new(ast::Expr::Case(<>)),
+    <Spanned<Tag>> <CaseExpr> => Box::new(ast::Expr::Case(<>)),
 }
 
 CaseMatchPattern = {
     Tag Ident,
 }
 MatchArm = {
-    <CaseMatchPattern> "->" <CallExpr>,
+    <Spanned<CaseMatchPattern>> "->" <CallExpr>,
 }
+MatchSub = "match" <Spanned<Expr>> "with" <SepList<MatchArm, "|">>;
 Match: Box<ast::Expr> = {
-    "match" <Expr> "with" <SepList<MatchArm, "|">> => Box::new(ast::Expr::Match(<>)),
+    MatchSub => {
+        let ((param, span), arms) = <>;
+        Box::new(ast::Expr::Match(param, arms, span))
+    }
 }
 
 LetLHS = {
@@ -99,32 +113,50 @@ LetRec: Box<ast::Expr> = {
 }
 
 
+MultOpSub: (ast::OpType, ast::Op) = {
+    "*" => (ast::OpType::IntOp, ast::Op::Mult),
+    "/" => (ast::OpType::IntOp, ast::Op::Div),
+    "*." => (ast::OpType::FloatOp, ast::Op::Mult),
+    "/." => (ast::OpType::FloatOp, ast::Op::Div),
+}
 MultOp: Box<ast::Expr> = {
-    <MultExpr> "*" <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Mult)),
-    <MultExpr> "/" <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Div)),
-    <MultExpr> "*." <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Mult)),
-    <MultExpr> "/." <CallExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Div)),
+    Spanned<(Spanned<MultExpr> MultOpSub Spanned<CallExpr>)> => {
+        let ((lhs, op, rhs), span) = <>;
+        Box::new(ast::Expr::BinOp(lhs, rhs, op.0, op.1, span))
+    },
+}
+AddOpSub: (ast::OpType, ast::Op) = {
+    "+" => (ast::OpType::IntOp, ast::Op::Add),
+    "-" => (ast::OpType::IntOp, ast::Op::Sub),
+    "+." => (ast::OpType::FloatOp, ast::Op::Add),
+    "-." => (ast::OpType::FloatOp, ast::Op::Sub),
+    "^" => (ast::OpType::StrOp, ast::Op::Add),
 }
 AddOp: Box<ast::Expr> = {
-    <AddExpr> "+" <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Add)),
-    <AddExpr> "-" <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntOp, ast::Op::Sub)),
-    <AddExpr> "+." <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Add)),
-    <AddExpr> "-." <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatOp, ast::Op::Sub)),
-    <AddExpr> "^" <MultExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::StrOp, ast::Op::Add)),
+    Spanned<(Spanned<AddExpr> AddOpSub Spanned<MultExpr>)> => {
+        let ((lhs, op, rhs), span) = <>;
+        Box::new(ast::Expr::BinOp(lhs, rhs, op.0, op.1, span))
+    },
+}
+CmpOpSub: (ast::OpType, ast::Op) = {
+    "<" => (ast::OpType::IntCmp, ast::Op::Lt),
+    "<=" => (ast::OpType::IntCmp, ast::Op::Lte),
+    ">" => (ast::OpType::IntCmp, ast::Op::Gt),
+    ">=" => (ast::OpType::IntCmp, ast::Op::Gte),
+
+    "<." => (ast::OpType::FloatCmp, ast::Op::Lt),
+    "<=." => (ast::OpType::FloatCmp, ast::Op::Lte),
+    ">." => (ast::OpType::FloatCmp, ast::Op::Gt),
+    ">=." => (ast::OpType::FloatCmp, ast::Op::Gte),
+
+    "==" => (ast::OpType::AnyCmp, ast::Op::Eq),
+    "!=" => (ast::OpType::AnyCmp, ast::Op::Neq),
 }
 CmpOp: Box<ast::Expr> = {
-    <AddExpr> "<" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Lt)),
-    <AddExpr> "<=" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Lte)),
-    <AddExpr> ">" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Gt)),
-    <AddExpr> ">=" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::IntCmp, ast::Op::Gte)),
-
-    <AddExpr> "<." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Lt)),
-    <AddExpr> "<=." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Lte)),
-    <AddExpr> ">." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Gt)),
-    <AddExpr> ">=." <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::FloatCmp, ast::Op::Gte)),
-
-    <AddExpr> "==" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::AnyCmp, ast::Op::Eq)),
-    <AddExpr> "!=" <AddExpr> => Box::new(ast::Expr::BinOp(<>, ast::OpType::AnyCmp, ast::Op::Neq)),
+    Spanned<(Spanned<AddExpr> CmpOpSub Spanned<AddExpr>)> => {
+        let ((lhs, op, rhs), span) = <>;
+        Box::new(ast::Expr::BinOp(lhs, rhs, op.0, op.1, span))
+    },
 }
 
 

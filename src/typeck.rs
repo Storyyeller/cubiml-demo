@@ -4,16 +4,9 @@ use std::fmt;
 
 use crate::ast;
 use crate::core::*;
+use crate::spans::{Span, SpannedError as SyntaxError};
 
-#[derive(Debug)]
-pub struct SyntaxError(String);
-impl fmt::Display for SyntaxError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-impl error::Error for SyntaxError {}
-type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
+type Result<T> = std::result::Result<T, SyntaxError>;
 
 struct Bindings {
     m: HashMap<String, Value>,
@@ -58,78 +51,82 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
     use ast::Expr::*;
 
     match expr {
-        BinOp(lhs_expr, rhs_expr, op_type, op) => {
+        BinOp((lhs_expr, lhs_span), (rhs_expr, rhs_span), op_type, op, full_span) => {
             use ast::OpType::*;
-
             let lhs_type = check_expr(engine, bindings, lhs_expr)?;
             let rhs_type = check_expr(engine, bindings, rhs_expr)?;
 
             Ok(match op_type {
                 IntOp => {
-                    let bound = engine.int_use();
-                    engine.flow(lhs_type, bound)?;
-                    engine.flow(rhs_type, bound)?;
-                    engine.int()
+                    let lhs_bound = engine.int_use(*lhs_span);
+                    let rhs_bound = engine.int_use(*rhs_span);
+                    engine.flow(lhs_type, lhs_bound)?;
+                    engine.flow(rhs_type, rhs_bound)?;
+                    engine.int(*full_span)
                 }
                 FloatOp => {
-                    let bound = engine.float_use();
-                    engine.flow(lhs_type, bound)?;
-                    engine.flow(rhs_type, bound)?;
-                    engine.float()
+                    let lhs_bound = engine.float_use(*lhs_span);
+                    let rhs_bound = engine.float_use(*rhs_span);
+                    engine.flow(lhs_type, lhs_bound)?;
+                    engine.flow(rhs_type, rhs_bound)?;
+                    engine.float(*full_span)
                 }
                 StrOp => {
-                    let bound = engine.str_use();
-                    engine.flow(lhs_type, bound)?;
-                    engine.flow(rhs_type, bound)?;
-                    engine.str()
+                    let lhs_bound = engine.str_use(*lhs_span);
+                    let rhs_bound = engine.str_use(*rhs_span);
+                    engine.flow(lhs_type, lhs_bound)?;
+                    engine.flow(rhs_type, rhs_bound)?;
+                    engine.str(*full_span)
                 }
                 IntCmp => {
-                    let bound = engine.int_use();
-                    engine.flow(lhs_type, bound)?;
-                    engine.flow(rhs_type, bound)?;
-                    engine.bool()
+                    let lhs_bound = engine.int_use(*lhs_span);
+                    let rhs_bound = engine.int_use(*rhs_span);
+                    engine.flow(lhs_type, lhs_bound)?;
+                    engine.flow(rhs_type, rhs_bound)?;
+                    engine.bool(*full_span)
                 }
                 FloatCmp => {
-                    let bound = engine.float_use();
-                    engine.flow(lhs_type, bound)?;
-                    engine.flow(rhs_type, bound)?;
-                    engine.bool()
+                    let lhs_bound = engine.float_use(*lhs_span);
+                    let rhs_bound = engine.float_use(*rhs_span);
+                    engine.flow(lhs_type, lhs_bound)?;
+                    engine.flow(rhs_type, rhs_bound)?;
+                    engine.bool(*full_span)
                 }
-                AnyCmp => engine.bool(),
+                AnyCmp => engine.bool(*full_span),
             })
         }
-        Call(func_expr, arg_expr) => {
+        Call(func_expr, arg_expr, span) => {
             let func_type = check_expr(engine, bindings, func_expr)?;
             let arg_type = check_expr(engine, bindings, arg_expr)?;
 
             let (ret_type, ret_bound) = engine.var();
-            let bound = engine.func_use(arg_type, ret_bound);
+            let bound = engine.func_use(arg_type, ret_bound, *span);
             engine.flow(func_type, bound)?;
             Ok(ret_type)
         }
-        Case(tag, val_expr) => {
+        Case((tag, span), val_expr) => {
             let val_type = check_expr(engine, bindings, val_expr)?;
-            Ok(engine.case((tag.clone(), val_type)))
+            Ok(engine.case((tag.clone(), val_type), *span))
         }
-        FieldAccess(lhs_expr, name) => {
+        FieldAccess(lhs_expr, name, span) => {
             let lhs_type = check_expr(engine, bindings, lhs_expr)?;
 
             let (field_type, field_bound) = engine.var();
-            let bound = engine.obj_use((name.clone(), field_bound));
+            let bound = engine.obj_use((name.clone(), field_bound), *span);
             engine.flow(lhs_type, bound)?;
             Ok(field_type)
         }
-        FuncDef(arg_name, body_expr) => {
+        FuncDef(((arg_name, body_expr), span)) => {
             let (arg_type, arg_bound) = engine.var();
             let body_type = bindings.in_child_scope(|bindings| {
                 bindings.insert(arg_name.clone(), arg_type);
                 check_expr(engine, bindings, body_expr)
             })?;
-            Ok(engine.func(arg_bound, body_type))
+            Ok(engine.func(arg_bound, body_type, *span))
         }
-        If(cond_expr, then_expr, else_expr) => {
+        If((cond_expr, span), then_expr, else_expr) => {
             let cond_type = check_expr(engine, bindings, cond_expr)?;
-            let bound = engine.bool_use();
+            let bound = engine.bool_use(*span);
             engine.flow(cond_type, bound)?;
 
             let then_type = check_expr(engine, bindings, then_expr)?;
@@ -162,24 +159,30 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
 
             check_expr(engine, bindings, rest_expr)
         }),
-        Literal(type_, code) => {
+        Literal(type_, (code, span)) => {
             use ast::Literal::*;
+            let span = *span;
             Ok(match type_ {
-                Bool => engine.bool(),
-                Float => engine.float(),
-                Int => engine.int(),
-                Str => engine.str(),
+                Bool => engine.bool(span),
+                Float => engine.float(span),
+                Int => engine.int(span),
+                Str => engine.str(span),
             })
         }
-        Match(match_expr, cases) => {
+        Match(match_expr, cases, span) => {
             let match_type = check_expr(engine, bindings, match_expr)?;
             let (result_type, result_bound) = engine.var();
 
-            let mut case_names = HashSet::with_capacity(cases.len());
+            let mut case_names = HashMap::with_capacity(cases.len());
             let mut case_type_pairs = Vec::with_capacity(cases.len());
-            for ((tag, name), rhs_expr) in cases {
-                if !case_names.insert(&*name) {
-                    return Err(SyntaxError(format!("Repeated match case {}", name)).into());
+            for (((tag, name), case_span), rhs_expr) in cases {
+                if let Some(old_span) = case_names.insert(&*tag, *case_span) {
+                    return Err(SyntaxError::new2(
+                        "SyntaxError: Repeated match case",
+                        *case_span,
+                        "Note: Case was already matched here",
+                        old_span,
+                    ));
                 }
 
                 let (wrapped_type, wrapped_bound) = engine.var();
@@ -192,27 +195,33 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 engine.flow(rhs_type, result_bound)?;
             }
 
-            let bound = engine.case_use(case_type_pairs);
+            let bound = engine.case_use(case_type_pairs, *span);
             engine.flow(match_type, bound)?;
 
             Ok(result_type)
         }
-        Record(fields) => {
-            let mut field_names = HashSet::with_capacity(fields.len());
+        Record((fields, span)) => {
+            let mut field_names = HashMap::with_capacity(fields.len());
             let mut field_type_pairs = Vec::with_capacity(fields.len());
-            for (name, expr) in fields {
-                if !field_names.insert(&*name) {
-                    return Err(SyntaxError(format!("Repeated field name {}", name)).into());
+            for ((name, name_span), expr) in fields {
+                if let Some(old_span) = field_names.insert(&*name, *name_span) {
+                    // return Err(SyntaxError(format!("Repeated field name {}", name)).into());
+                    return Err(SyntaxError::new2(
+                        "SyntaxError: Repeated field name",
+                        *name_span,
+                        "Note: Field was already defined here",
+                        old_span,
+                    ));
                 }
 
                 let t = check_expr(engine, bindings, expr)?;
                 field_type_pairs.push((name.clone(), t));
             }
-            Ok(engine.obj(field_type_pairs))
+            Ok(engine.obj(field_type_pairs, *span))
         }
-        Variable(name) => bindings
+        Variable((name, span)) => bindings
             .get(name.as_str())
-            .ok_or_else(|| SyntaxError(format!("Undefined variable {}", name)).into()),
+            .ok_or_else(|| SyntaxError::new1(format!("SyntaxError: Undefined variable {}", name), *span)),
     }
 }
 

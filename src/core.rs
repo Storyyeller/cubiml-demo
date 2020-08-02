@@ -3,6 +3,7 @@ use std::error;
 use std::fmt;
 
 use crate::reachability;
+use crate::spans::{Span, SpannedError as TypeError};
 
 type ID = usize;
 
@@ -10,15 +11,6 @@ type ID = usize;
 pub struct Value(ID);
 #[derive(Copy, Clone, Debug)]
 pub struct Use(ID);
-
-#[derive(Debug)]
-pub struct TypeError(String);
-impl fmt::Display for TypeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-impl error::Error for TypeError {}
 
 #[derive(Debug, Clone)]
 enum VTypeHead {
@@ -41,11 +33,11 @@ enum UTypeHead {
     UCase { cases: HashMap<String, Use> },
 }
 
-fn check_heads(lhs: &VTypeHead, rhs: &UTypeHead, out: &mut Vec<(Value, Use)>) -> Result<(), TypeError> {
+fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(Value, Use)>) -> Result<(), TypeError> {
     use UTypeHead::*;
     use VTypeHead::*;
 
-    match (lhs, rhs) {
+    match (&lhs.0, &rhs.0) {
         (&VBool, &UBool) => Ok(()),
         (&VFloat, &UFloat) => Ok(()),
         (&VInt, &UInt) => Ok(()),
@@ -64,7 +56,12 @@ fn check_heads(lhs: &VTypeHead, rhs: &UTypeHead, out: &mut Vec<(Value, Use)>) ->
                     out.push((lhs2, rhs2));
                     Ok(())
                 }
-                None => Err(TypeError(format!("Missing field {}", name))),
+                None => Err(TypeError::new2(
+                    format!("TypeError: Missing field {}\nNote: Field is accessed here", name),
+                    rhs.1,
+                    "But the record is defined without that field here.",
+                    lhs.1,
+                )),
             }
         }
         (&VCase { case: (ref name, lhs2) }, &UCase { cases: ref cases2 }) => {
@@ -74,18 +71,49 @@ fn check_heads(lhs: &VTypeHead, rhs: &UTypeHead, out: &mut Vec<(Value, Use)>) ->
                     out.push((lhs2, rhs2));
                     Ok(())
                 }
-                None => Err(TypeError(format!("Unhandled case {}", name))),
+                None => Err(TypeError::new2(
+                    format!("TypeError: Unhandled case {}\nNote: Case originates here", name),
+                    lhs.1,
+                    "But it is not handled here.",
+                    rhs.1,
+                )),
             }
         }
-        _ => Err(TypeError("Unexpected types".to_string())),
+        _ => {
+            let found = match lhs.0 {
+                VBool => "boolean",
+                VFloat => "float",
+                VInt => "integer",
+                VStr => "string",
+                VFunc { .. } => "function",
+                VObj { .. } => "record",
+                VCase { .. } => "case",
+            };
+            let expected = match rhs.0 {
+                UBool => "boolean",
+                UFloat => "float",
+                UInt => "integer",
+                UStr => "string",
+                UFunc { .. } => "function",
+                UObj { .. } => "record",
+                UCase { .. } => "case",
+            };
+
+            Err(TypeError::new2(
+                format!("TypeError: Value is required to be a {} here,", expected),
+                rhs.1,
+                format!("But that value may be a {} originating here.", found),
+                lhs.1,
+            ))
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 enum TypeNode {
     Var,
-    Value(VTypeHead),
-    Use(UTypeHead),
+    Value((VTypeHead, Span)),
+    Use((UTypeHead, Span)),
 }
 #[derive(Debug, Clone)]
 pub struct TypeCheckerCore {
@@ -119,17 +147,17 @@ impl TypeCheckerCore {
         Ok(())
     }
 
-    fn new_val(&mut self, val_type: VTypeHead) -> Value {
+    fn new_val(&mut self, val_type: VTypeHead, span: Span) -> Value {
         let i = self.r.add_node();
         assert!(i == self.types.len());
-        self.types.push(TypeNode::Value(val_type));
+        self.types.push(TypeNode::Value((val_type, span)));
         Value(i)
     }
 
-    fn new_use(&mut self, constraint: UTypeHead) -> Use {
+    fn new_use(&mut self, constraint: UTypeHead, span: Span) -> Use {
         let i = self.r.add_node();
         assert!(i == self.types.len());
-        self.types.push(TypeNode::Use(constraint));
+        self.types.push(TypeNode::Use((constraint, span)));
         Use(i)
     }
 
@@ -140,52 +168,52 @@ impl TypeCheckerCore {
         (Value(i), Use(i))
     }
 
-    pub fn bool(&mut self) -> Value {
-        self.new_val(VTypeHead::VBool)
+    pub fn bool(&mut self, span: Span) -> Value {
+        self.new_val(VTypeHead::VBool, span)
     }
-    pub fn float(&mut self) -> Value {
-        self.new_val(VTypeHead::VFloat)
+    pub fn float(&mut self, span: Span) -> Value {
+        self.new_val(VTypeHead::VFloat, span)
     }
-    pub fn int(&mut self) -> Value {
-        self.new_val(VTypeHead::VInt)
+    pub fn int(&mut self, span: Span) -> Value {
+        self.new_val(VTypeHead::VInt, span)
     }
-    pub fn str(&mut self) -> Value {
-        self.new_val(VTypeHead::VStr)
-    }
-
-    pub fn bool_use(&mut self) -> Use {
-        self.new_use(UTypeHead::UBool)
-    }
-    pub fn float_use(&mut self) -> Use {
-        self.new_use(UTypeHead::UFloat)
-    }
-    pub fn int_use(&mut self) -> Use {
-        self.new_use(UTypeHead::UInt)
-    }
-    pub fn str_use(&mut self) -> Use {
-        self.new_use(UTypeHead::UStr)
+    pub fn str(&mut self, span: Span) -> Value {
+        self.new_val(VTypeHead::VStr, span)
     }
 
-    pub fn func(&mut self, arg: Use, ret: Value) -> Value {
-        self.new_val(VTypeHead::VFunc { arg, ret })
+    pub fn bool_use(&mut self, span: Span) -> Use {
+        self.new_use(UTypeHead::UBool, span)
     }
-    pub fn func_use(&mut self, arg: Value, ret: Use) -> Use {
-        self.new_use(UTypeHead::UFunc { arg, ret })
+    pub fn float_use(&mut self, span: Span) -> Use {
+        self.new_use(UTypeHead::UFloat, span)
+    }
+    pub fn int_use(&mut self, span: Span) -> Use {
+        self.new_use(UTypeHead::UInt, span)
+    }
+    pub fn str_use(&mut self, span: Span) -> Use {
+        self.new_use(UTypeHead::UStr, span)
     }
 
-    pub fn obj(&mut self, fields: Vec<(String, Value)>) -> Value {
+    pub fn func(&mut self, arg: Use, ret: Value, span: Span) -> Value {
+        self.new_val(VTypeHead::VFunc { arg, ret }, span)
+    }
+    pub fn func_use(&mut self, arg: Value, ret: Use, span: Span) -> Use {
+        self.new_use(UTypeHead::UFunc { arg, ret }, span)
+    }
+
+    pub fn obj(&mut self, fields: Vec<(String, Value)>, span: Span) -> Value {
         let fields = fields.into_iter().collect();
-        self.new_val(VTypeHead::VObj { fields })
+        self.new_val(VTypeHead::VObj { fields }, span)
     }
-    pub fn obj_use(&mut self, field: (String, Use)) -> Use {
-        self.new_use(UTypeHead::UObj { field })
+    pub fn obj_use(&mut self, field: (String, Use), span: Span) -> Use {
+        self.new_use(UTypeHead::UObj { field }, span)
     }
 
-    pub fn case(&mut self, case: (String, Value)) -> Value {
-        self.new_val(VTypeHead::VCase { case })
+    pub fn case(&mut self, case: (String, Value), span: Span) -> Value {
+        self.new_val(VTypeHead::VCase { case }, span)
     }
-    pub fn case_use(&mut self, cases: Vec<(String, Use)>) -> Use {
+    pub fn case_use(&mut self, cases: Vec<(String, Use)>, span: Span) -> Use {
         let cases = cases.into_iter().collect();
-        self.new_use(UTypeHead::UCase { cases })
+        self.new_use(UTypeHead::UCase { cases }, span)
     }
 }

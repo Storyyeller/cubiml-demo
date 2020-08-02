@@ -162,7 +162,7 @@ function initializeRepl(root, compiler, Printer) {
             const val = eval(compiled);
             return [true, (new Printer).print(val)];
         } catch (e) {
-            return [false, 'An error occured during evaluation in the repl: ' + e.toString()];
+            return [false, 'An error occurred during evaluation in the repl: ' + e.toString()];
         }
     }
 

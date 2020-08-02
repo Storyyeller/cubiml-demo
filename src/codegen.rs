@@ -61,7 +61,7 @@ impl ModuleBuilder {
 
 fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
     match expr {
-        ast::Expr::BinOp(lhs_expr, rhs_expr, op_type, op) => {
+        ast::Expr::BinOp((lhs_expr, lhs_span), (rhs_expr, rhs_span), op_type, op, full_span) => {
             let lhs = compile(ctx, lhs_expr);
             let rhs = compile(ctx, rhs_expr);
             let jsop = match op {
@@ -80,21 +80,21 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             };
             js::binop(lhs, rhs, jsop)
         }
-        ast::Expr::Call(func, arg) => {
+        ast::Expr::Call(func, arg, _) => {
             let lhs = compile(ctx, func);
             let rhs = compile(ctx, arg);
             js::call(lhs, rhs)
         }
-        ast::Expr::Case(tag, expr) => {
+        ast::Expr::Case((tag, _), expr) => {
             let tag = js::lit(format!("\"{}\"", tag));
             let expr = compile(ctx, expr);
             js::obj(vec![("$tag".to_string(), tag), ("$val".to_string(), expr)])
         }
-        ast::Expr::FieldAccess(lhs_expr, name) => {
+        ast::Expr::FieldAccess(lhs_expr, name, _) => {
             let lhs = compile(ctx, lhs_expr);
             js::field(lhs, name.clone())
         }
-        ast::Expr::FuncDef(arg_name, body_expr) => {
+        ast::Expr::FuncDef(((arg_name, body_expr), _)) => {
             ctx.ml_scope(|ctx| {
                 let js_arg_name = format!("arg{}", ctx.scope_counter);
                 let new_scope_name = format!("s{}", ctx.scope_counter);
@@ -118,7 +118,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 js::func(js_arg_name, new_scope_name, body)
             })
         }
-        ast::Expr::If(cond_expr, then_expr, else_expr) => {
+        ast::Expr::If((cond_expr, _), then_expr, else_expr) => {
             let cond_expr = compile(ctx, cond_expr);
             let then_expr = compile(ctx, then_expr);
             let else_expr = compile(ctx, else_expr);
@@ -154,7 +154,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 js::comma_list(exprs)
             })
         }
-        ast::Expr::Literal(type_, code) => {
+        ast::Expr::Literal(type_, (code, _)) => {
             let mut code = code.clone();
             if let ast::Literal::Int = type_ {
                 code.push_str("n");
@@ -165,7 +165,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 js::lit(code)
             }
         }
-        ast::Expr::Match(match_expr, cases) => {
+        ast::Expr::Match(match_expr, cases, _) => {
             let temp_var = js::field(ctx.scope_expr.clone(), ctx.new_var_name());
             let part1 = js::assign(temp_var.clone(), compile(ctx, match_expr));
 
@@ -173,7 +173,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let val_expr = js::field(temp_var, "$val".to_string());
 
             let mut branches = Vec::new();
-            for ((tag, name), rhs_expr) in cases {
+            for (((tag, name), _), rhs_expr) in cases {
                 ctx.ml_scope(|ctx| {
                     ctx.set_binding(name.to_string(), val_expr.clone());
                     branches.push((tag, compile(ctx, rhs_expr)));
@@ -187,8 +187,13 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             }
             js::comma_pair(part1, res)
         }
-        ast::Expr::Record(fields) => js::obj(fields.iter().map(|(name, expr)| (name.clone(), compile(ctx, expr))).collect()),
-        ast::Expr::Variable(name) => ctx.bindings.get(name).unwrap().clone(),
+        ast::Expr::Record((fields, _)) => js::obj(
+            fields
+                .iter()
+                .map(|((name, _), expr)| (name.clone(), compile(ctx, expr)))
+                .collect(),
+        ),
+        ast::Expr::Variable((name, _)) => ctx.bindings.get(name).unwrap().clone(),
     }
 }
 

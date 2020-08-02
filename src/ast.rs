@@ -1,3 +1,5 @@
+use crate::spans::{Span, Spanned};
+
 #[derive(Debug)]
 pub enum Literal {
     Bool,
@@ -38,18 +40,18 @@ type CaseMatchPattern = (String, String);
 
 #[derive(Debug)]
 pub enum Expr {
-    BinOp(Box<Expr>, Box<Expr>, OpType, Op),
-    Call(Box<Expr>, Box<Expr>),
-    Case(String, Box<Expr>),
-    FieldAccess(Box<Expr>, String),
-    FuncDef(String, Box<Expr>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
+    BinOp(Spanned<Box<Expr>>, Spanned<Box<Expr>>, OpType, Op, Span),
+    Call(Box<Expr>, Box<Expr>, Span),
+    Case(Spanned<String>, Box<Expr>),
+    FieldAccess(Box<Expr>, String, Span),
+    FuncDef(Spanned<(String, Box<Expr>)>),
+    If(Spanned<Box<Expr>>, Box<Expr>, Box<Expr>),
     Let(VarDefinition, Box<Expr>),
     LetRec(Vec<VarDefinition>, Box<Expr>),
-    Literal(Literal, String),
-    Match(Box<Expr>, Vec<(CaseMatchPattern, Box<Expr>)>),
-    Record(Vec<(String, Box<Expr>)>),
-    Variable(String),
+    Literal(Literal, Spanned<String>),
+    Match(Box<Expr>, Vec<(Spanned<CaseMatchPattern>, Box<Expr>)>, Span),
+    Record(Spanned<Vec<(Spanned<String>, Box<Expr>)>>),
+    Variable(Spanned<String>),
 }
 
 #[derive(Debug)]
