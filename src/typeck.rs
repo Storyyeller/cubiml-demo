@@ -267,12 +267,12 @@ impl TypeckState {
     pub fn check_script(&mut self, parsed: &[ast::TopLevel]) -> Result<()> {
         // Create temporary copy of the entire type state so we can roll
         // back all the changes if the script contains an error.
-        let mut temp = self.core.clone();
+        let temp = self.core.save();
 
         for item in parsed {
             if let Err(e) = check_toplevel(&mut self.core, &mut self.bindings, item) {
                 // Roll back changes to the type state and bindings
-                std::mem::swap(&mut self.core, &mut temp);
+                self.core.restore(temp);
                 self.bindings.unwind(0);
                 return Err(e);
             }

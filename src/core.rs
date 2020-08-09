@@ -216,4 +216,14 @@ impl TypeCheckerCore {
         let cases = cases.into_iter().collect();
         self.new_use(UTypeHead::UCase { cases }, span)
     }
+
+    pub fn save(&self) -> SavePoint {
+        (self.types.len(), self.r.clone())
+    }
+    pub fn restore(&mut self, mut save: SavePoint) {
+        self.types.truncate(save.0);
+        std::mem::swap(&mut self.r, &mut save.1);
+    }
 }
+
+type SavePoint = (usize, reachability::Reachability);
