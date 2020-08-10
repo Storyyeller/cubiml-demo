@@ -183,6 +183,37 @@ Use `+, -, *, /` for integer math and `<, <=, >, >=` for integer comparisons. Fo
 "" != {}
 ```
 
+#### References
+
+Cubiml supports mutability via ML-style references. You can simulate traditional mutable fields by storing a reference in a record field, and a mutable variable by storing a reference in a variable and so on.
+
+ML references are not quite the same as what you may be used to. They are pointers to a mutable, garbage collected storage location on the heap and support three operations:
+
+* `ref x` creates a new reference that initially holds the value `x`. Note that this _copies_ the value of `x` to a new location and returns a pointer to that location. `ref foo.bar` returns a pointer to a location that is initialized to the value of `foo.bar`, rather than a pointer to the field of `foo` itself.
+* `!r` _dereferences_ the reference `r` and returns whatever value is currently stored inside. This is another example where ML-style and C-style syntax differ confusingly.
+* `r := x` _stores_ `x` inside the reference `r`, overwriting whatever value was previously stored there. Traditionally, this operation returns a unit value (i.e. empty record), but we'll follow the approach of C-style assignments as Javascript does, where assignment returns the new value, since that's easier to implement when compiling to Javascript. You'll probably want to do things differently in your own language, but it's an easy change to make.
+
+Note that references may be aliased. For example, we can create a reference `a` and copy it to the variable `b`. Then any changes made via `b` are visible via `a` and vice versa, as shown in the following REPL session.
+
+```
+>> let a = ref 42
+
+ref 42
+
+>> let b = a
+
+ref 42
+
+>> b := 77
+
+77
+
+>> !a
+
+77
+```
+
+
 
 ## Building cubiml from source
 

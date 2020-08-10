@@ -21,6 +21,7 @@ enum VTypeHead {
     VFunc { arg: Use, ret: Value },
     VObj { fields: HashMap<String, Value> },
     VCase { case: (String, Value) },
+    VRef { write: Option<Use>, read: Option<Value> },
 }
 #[derive(Debug, Clone)]
 enum UTypeHead {
@@ -31,6 +32,7 @@ enum UTypeHead {
     UFunc { arg: Value, ret: Use },
     UObj { field: (String, Use) },
     UCase { cases: HashMap<String, Use> },
+    URef { write: Option<Value>, read: Option<Use> },
 }
 
 fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(Value, Use)>) -> Result<(), TypeError> {
@@ -79,6 +81,34 @@ fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(
                 )),
             }
         }
+        (&VRef { read: r1, write: w1 }, &URef { read: r2, write: w2 }) => {
+            if let Some(r2) = r2 {
+                if let Some(r1) = r1 {
+                    out.push((r1, r2));
+                } else {
+                    return Err(TypeError::new2(
+                        "TypeError: Reference is not readable.\nNote: Ref is made write-only here",
+                        lhs.1,
+                        "But is read here.",
+                        rhs.1,
+                    ));
+                }
+            }
+            if let Some(w2) = w2 {
+                if let Some(w1) = w1 {
+                    // flip the order since writes are contravariant
+                    out.push((w2, w1));
+                } else {
+                    return Err(TypeError::new2(
+                        "TypeError: Reference is not writable.\nNote: Ref is made read-only here",
+                        lhs.1,
+                        "But is written here.",
+                        rhs.1,
+                    ));
+                }
+            }
+            Ok(())
+        }
         _ => {
             let found = match lhs.0 {
                 VBool => "boolean",
@@ -88,6 +118,7 @@ fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(
                 VFunc { .. } => "function",
                 VObj { .. } => "record",
                 VCase { .. } => "case",
+                VRef { .. } => "ref",
             };
             let expected = match rhs.0 {
                 UBool => "boolean",
@@ -97,6 +128,7 @@ fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(
                 UFunc { .. } => "function",
                 UObj { .. } => "record",
                 UCase { .. } => "case",
+                URef { .. } => "ref",
             };
 
             Err(TypeError::new2(
@@ -215,6 +247,13 @@ impl TypeCheckerCore {
     pub fn case_use(&mut self, cases: Vec<(String, Use)>, span: Span) -> Use {
         let cases = cases.into_iter().collect();
         self.new_use(UTypeHead::UCase { cases }, span)
+    }
+
+    pub fn reference(&mut self, write: Option<Use>, read: Option<Value>, span: Span) -> Value {
+        self.new_val(VTypeHead::VRef { write, read }, span)
+    }
+    pub fn reference_use(&mut self, write: Option<Value>, read: Option<Use>, span: Span) -> Use {
+        self.new_use(UTypeHead::URef { write, read }, span)
     }
 
     pub fn save(&self) -> SavePoint {

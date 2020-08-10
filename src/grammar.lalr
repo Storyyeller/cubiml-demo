@@ -81,7 +81,7 @@ CaseMatchPattern = {
     Tag Ident,
 }
 MatchArm = {
-    <Spanned<CaseMatchPattern>> "->" <CallExpr>,
+    <Spanned<CaseMatchPattern>> "->" <CompareExpr>,
 }
 MatchSub = "match" <Spanned<Expr>> "with" <SepList<MatchArm, "|">>;
 Match: Box<ast::Expr> = {
@@ -110,6 +110,20 @@ LetRecLHS = {
 }
 LetRec: Box<ast::Expr> = {
      <LetRecLHS> <LetRHS> => Box::new(ast::Expr::LetRec(<>)),
+}
+
+
+NewRef: Box<ast::Expr> = {
+    Spanned<("ref" CaseExpr)> => {
+        let ((_, expr), span) = <>;
+        Box::new(ast::Expr::NewRef(expr, span))
+    }
+}
+RefGet: Box<ast::Expr> = {
+    "!" <Spanned<RefExpr>> => Box::new(ast::Expr::RefGet(<>))
+}
+RefSet: Box<ast::Expr> = {
+    <Spanned<CallExpr>> ":=" <Expr> => Box::new(ast::Expr::RefSet(<>))
 }
 
 
@@ -167,9 +181,14 @@ SimpleExpr = {
     VarOrLiteral,
     "(" <Expr> ")",
 }
-CaseExpr = {
+RefExpr = {
     SimpleExpr,
+    RefGet,
+}
+CaseExpr = {
+    RefExpr,
     Case,
+    NewRef,
 }
 CallExpr = {
     CaseExpr,
@@ -194,6 +213,7 @@ Expr = {
     Let,
     LetRec,
     Match,
+    RefSet,
 }
 
 TopLevelItem: ast::TopLevel = {

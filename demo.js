@@ -264,6 +264,9 @@ class Printer {
                 this.parts.push(' ');
             }
             this.visit(e.$val);
+        } else if ('$p' in e) {
+            this.parts.push('ref ');
+            this.visit(e.$p);
         } else {
             this.parts.push('{');
             let first = true;

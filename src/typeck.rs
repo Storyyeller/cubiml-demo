@@ -200,6 +200,12 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
 
             Ok(result_type)
         }
+        NewRef(expr, span) => {
+            let expr_type = check_expr(engine, bindings, expr)?;
+            let (read, write) = engine.var();
+            engine.flow(expr_type, write)?;
+            Ok(engine.reference(Some(write), Some(read), *span))
+        }
         Record((fields, span)) => {
             let mut field_names = HashMap::with_capacity(fields.len());
             let mut field_type_pairs = Vec::with_capacity(fields.len());
@@ -218,6 +224,22 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 field_type_pairs.push((name.clone(), t));
             }
             Ok(engine.obj(field_type_pairs, *span))
+        }
+        RefGet((expr, span)) => {
+            let expr_type = check_expr(engine, bindings, expr)?;
+
+            let (cell_type, cell_bound) = engine.var();
+            let bound = engine.reference_use(None, Some(cell_bound), *span);
+            engine.flow(expr_type, bound)?;
+            Ok(cell_type)
+        }
+        RefSet((lhs_expr, lhs_span), rhs_expr) => {
+            let lhs_type = check_expr(engine, bindings, lhs_expr)?;
+            let rhs_type = check_expr(engine, bindings, rhs_expr)?;
+
+            let bound = engine.reference_use(Some(rhs_type), None, *lhs_span);
+            engine.flow(lhs_type, bound)?;
+            Ok(rhs_type)
         }
         Variable((name, span)) => bindings
             .get(name.as_str())

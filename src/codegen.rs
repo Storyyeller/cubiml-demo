@@ -187,12 +187,25 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             }
             js::comma_pair(part1, res)
         }
+        ast::Expr::NewRef(expr, span) => {
+            let expr = compile(ctx, expr);
+            js::obj(vec![("$p".to_string(), expr)])
+        }
         ast::Expr::Record((fields, _)) => js::obj(
             fields
                 .iter()
                 .map(|((name, _), expr)| (name.clone(), compile(ctx, expr)))
                 .collect(),
         ),
+        ast::Expr::RefGet((expr, span)) => {
+            let expr = compile(ctx, expr);
+            js::field(expr, "$p".to_string())
+        }
+        ast::Expr::RefSet((lhs_expr, lhs_span), rhs_expr) => {
+            let lhs = compile(ctx, lhs_expr);
+            let rhs = compile(ctx, rhs_expr);
+            js::assign(js::field(lhs, "$p".to_string()), rhs)
+        }
         ast::Expr::Variable((name, _)) => ctx.bindings.get(name).unwrap().clone(),
     }
 }

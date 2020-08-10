@@ -50,7 +50,10 @@ pub enum Expr {
     LetRec(Vec<VarDefinition>, Box<Expr>),
     Literal(Literal, Spanned<String>),
     Match(Box<Expr>, Vec<(Spanned<CaseMatchPattern>, Box<Expr>)>, Span),
+    NewRef(Box<Expr>, Span),
     Record(Spanned<Vec<(Spanned<String>, Box<Expr>)>>),
+    RefGet(Spanned<Box<Expr>>),
+    RefSet(Spanned<Box<Expr>>, Box<Expr>),
     Variable(Spanned<String>),
 }
 
