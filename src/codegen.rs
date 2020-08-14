@@ -88,7 +88,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
         ast::Expr::Case((tag, _), expr) => {
             let tag = js::lit(format!("\"{}\"", tag));
             let expr = compile(ctx, expr);
-            js::obj(vec![("$tag".to_string(), tag), ("$val".to_string(), expr)])
+            js::obj(None, vec![("$tag".to_string(), tag), ("$val".to_string(), expr)])
         }
         ast::Expr::FieldAccess(lhs_expr, name, _) => {
             let lhs = compile(ctx, lhs_expr);
@@ -201,9 +201,10 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
         }
         ast::Expr::NewRef(expr, span) => {
             let expr = compile(ctx, expr);
-            js::obj(vec![("$p".to_string(), expr)])
+            js::obj(None, vec![("$p".to_string(), expr)])
         }
-        ast::Expr::Record((fields, _)) => js::obj(
+        ast::Expr::Record(proto, fields, span) => js::obj(
+            proto.as_ref().map(|expr| compile(ctx, expr)),
             fields
                 .iter()
                 .map(|((name, _), expr)| (name.clone(), compile(ctx, expr)))

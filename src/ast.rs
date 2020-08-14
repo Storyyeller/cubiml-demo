@@ -56,7 +56,7 @@ pub enum Expr {
     Literal(Literal, Spanned<String>),
     Match(Box<Expr>, Vec<(Spanned<Pattern>, Box<Expr>)>, Span),
     NewRef(Box<Expr>, Span),
-    Record(Spanned<Vec<(Spanned<String>, Box<Expr>)>>),
+    Record(Option<Box<Expr>>, Vec<(Spanned<String>, Box<Expr>)>, Span),
     RefGet(Spanned<Box<Expr>>),
     RefSet(Spanned<Box<Expr>>, Box<Expr>),
     Variable(Spanned<String>),

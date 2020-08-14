@@ -69,9 +69,16 @@ pub fn func(arg: String, scope: String, body: Expr) -> Expr {
     Expr(Expr2::ArrowFunc(arg, scope, Box::new(body)))
 }
 
-pub fn obj(fields: Vec<(String, Expr)>) -> Expr {
-    let fields = fields.into_iter().map(|(k, v)| (k, v.0.into())).collect();
-    Expr(Expr2::Obj(fields))
+pub fn obj(spread: Option<Expr>, fields: Vec<(String, Expr)>) -> Expr {
+    let mut prop_defs = Vec::new();
+    for v in spread {
+        prop_defs.push(PropertyDefinition::Spread(v.0.into()));
+    }
+    for (name, v) in fields {
+        prop_defs.push(PropertyDefinition::Named(name, v.0.into()));
+    }
+
+    Expr(Expr2::Obj(prop_defs))
 }
 
 #[derive(Clone, Debug)]
@@ -117,10 +124,16 @@ enum Precedence {
 }
 
 #[derive(Clone, Debug)]
+enum PropertyDefinition {
+    Named(String, Box<Expr2>),
+    Spread(Box<Expr2>),
+}
+
+#[derive(Clone, Debug)]
 enum Expr2 {
     Paren(Box<Expr2>),
     Literal(String),
-    Obj(Vec<(String, Box<Expr2>)>),
+    Obj(Vec<PropertyDefinition>),
     Var(String),
 
     Field(Box<Expr2>, String),
@@ -195,11 +208,21 @@ impl Expr2 {
             }
             Self::Obj(fields) => {
                 *out += "{";
-                for (name, val) in fields {
-                    *out += "'";
-                    *out += name;
-                    *out += "': ";
-                    val.write(out);
+                for prop_def in fields {
+                    use PropertyDefinition::*;
+                    match prop_def {
+                        Named(name, val) => {
+                            *out += "'";
+                            *out += name;
+                            *out += "': ";
+                            val.write(out);
+                        }
+                        Spread(val) => {
+                            *out += "...";
+                            val.write(out);
+                        }
+                    }
+
                     *out += ", ";
                 }
                 *out += "}";
@@ -292,9 +315,18 @@ impl Expr2 {
             }
             Self::Literal(code) => {}
             Self::Obj(fields) => {
-                for (name, val) in fields {
-                    val.add_parens();
-                    val.ensure(ASSIGN);
+                for prop_def in fields {
+                    use PropertyDefinition::*;
+                    match prop_def {
+                        Named(name, val) => {
+                            val.add_parens();
+                            val.ensure(ASSIGN);
+                        }
+                        Spread(val) => {
+                            val.add_parens();
+                            val.ensure(ASSIGN);
+                        }
+                    }
                 }
             }
             Self::Var(name) => {}

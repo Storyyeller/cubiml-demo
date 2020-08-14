@@ -120,7 +120,7 @@ In order to avoid code referring to variables that don't exist yet, the right ha
 
 #### Mutual recursion
 
-The above syntax works for a single function that refers to itself, but in some cases, you may want to have multiple functions that each refer to each other. Unlike in the case with `let`, simply nesting `let rec`s won't work. Therefore, `let rec` allows _multiple_ variable bindings, seperated by `and`. For example, you can define mutually recursive `even` and `odd` functions as follows:
+The above syntax works for a single function that refers to itself, but in some cases, you may want to have multiple functions that each refer to each other. Unlike in the case with `let`, simply nesting `let rec`s won't work. Therefore, `let rec` allows _multiple_ variable bindings, separated by `and`. For example, you can define mutually recursive `even` and `odd` functions as follows:
 
 ```ocaml
 let rec even = fun x -> if x == 0 then true else odd(x - 1)
@@ -129,7 +129,7 @@ let rec even = fun x -> if x == 0 then true else odd(x - 1)
 
 #### Case types and matching
 
-Sometimes you need to make different decisions based on runtime data in a type safe manner. Cubiml supports this via _case types_, also known as _sum types_ or _enums_. Basically, the way they work is that you can wrap a value with a tag, and then later match against it. The match expression has branches that execute different code depending on the runtime value of the tag. Crucially, each match branch has access to the static type of the original wrapped value for that specific tag. You can think of it like a simpler, statically checked version of Java's vistor pattern or a giant switch statement on an union in C.
+Sometimes you need to make different decisions based on runtime data in a type safe manner. Cubiml supports this via _case types_, also known as _sum types_ or _enums_. Basically, the way they work is that you can wrap a value with a tag, and then later match against it. The match expression has branches that execute different code depending on the runtime value of the tag. Crucially, each match branch has access to the static type of the original wrapped value for that specific tag. You can think of it like a simpler, statically checked version of Java's visitor pattern or a giant switch statement on an union in C.
 
 To wrap a value, prefix it with a grave (\`) character and an uppercase Tag. E.g. `` `Foo {hello="Hello"}``
 
@@ -149,7 +149,7 @@ Notice that within the Circle branch, the code can access the rad field, and wit
 
 #### Wildcard matches
 
-Match expressions can optionally end with a wildcard match, which is the same as a regular case match except that it doesn't include a tag. The wildcard branch will be taken if runtime tag of the matched value does not match any of the explicitly listed tags in the match expression.
+Match expressions can optionally end with a wildcard match, which is the same as a regular case match except that it doesn't include a tag. The wildcard branch will be taken if the runtime tag of the matched value does not match any of the explicitly listed tags in the match expression.
 
 ```ocaml
 let calculate_area = fun shape ->
@@ -177,8 +177,6 @@ let calculate_area2 = fun shape ->
 calculate_area2 `Circle {rad=6.7}
 calculate_area2 `Square {len=9.17}
 ```
-
-
 
 #### Literals 
 
@@ -220,8 +218,8 @@ Cubiml supports mutability via ML-style references. You can simulate traditional
 ML references are not quite the same as what you may be used to. They are pointers to a mutable, garbage collected storage location on the heap and support three operations:
 
 * `ref x` creates a new reference that initially holds the value `x`. Note that this _copies_ the value of `x` to a new location and returns a pointer to that location. `ref foo.bar` returns a pointer to a location that is initialized to the value of `foo.bar`, rather than a pointer to the field of `foo` itself.
-* `!r` _dereferences_ the reference `r` and returns whatever value is currently stored inside. This is another example where ML-style and C-style syntax differ confusingly.
-* `r := x` _stores_ `x` inside the reference `r`, overwriting whatever value was previously stored there. Traditionally, this operation returns a unit value (i.e. empty record), but we'll follow the approach of C-style assignments as Javascript does, where assignment returns the new value, since that's easier to implement when compiling to Javascript. You'll probably want to do things differently in your own language, but it's an easy change to make.
+* `!r` _dereferences_ the reference `r` and returns whatever value is currently stored inside. Note that this differs from the `!` operator in C style syntax.
+* `r := x` _stores_ `x` inside the reference `r`, overwriting whatever value was previously stored there. Traditionally, this operation returns a unit value (i.e. empty record), but cubiml instead follows the approach of C-style assignments as Javascript does, where assignment returns the new value.
 
 Note that references may be aliased. For example, we can create a reference `a` and copy it to the variable `b`. Then any changes made via `b` are visible via `a` and vice versa, as shown in the following REPL session.
 
@@ -243,6 +241,22 @@ ref 42
 77
 ```
 
+#### Record extension
+
+When creating a record, you can optionally copy over all the fields from another record by writing `foo |` at the start of the record, where `foo` is the record you want to copy from.
+
+```ocaml
+let foo = {a=1; b=""; c=false};
+let bar = {foo | a=true; d=-23}
+```
+
+The value you are copying fields from does not have to be a statically known value. It can be any arbitrary expression (as long as you surround it in parenthesis).
+
+```
+>> let baz = {(if foo.c then foo else bar) | c=true}
+
+{a=true; b=""; c=true; d=-23}
+```
 
 
 ## Building cubiml from source

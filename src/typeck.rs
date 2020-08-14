@@ -238,12 +238,16 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(expr_type, write)?;
             Ok(engine.reference(Some(write), Some(read), *span))
         }
-        Record((fields, span)) => {
+        Record(proto, fields, span) => {
+            let proto_type = match proto {
+                Some(expr) => Some(check_expr(engine, bindings, expr)?),
+                None => None,
+            };
+
             let mut field_names = HashMap::with_capacity(fields.len());
             let mut field_type_pairs = Vec::with_capacity(fields.len());
             for ((name, name_span), expr) in fields {
                 if let Some(old_span) = field_names.insert(&*name, *name_span) {
-                    // return Err(SyntaxError(format!("Repeated field name {}", name)).into());
                     return Err(SyntaxError::new2(
                         "SyntaxError: Repeated field name",
                         *name_span,
@@ -255,7 +259,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 let t = check_expr(engine, bindings, expr)?;
                 field_type_pairs.push((name.clone(), t));
             }
-            Ok(engine.obj(field_type_pairs, None, *span))
+            Ok(engine.obj(field_type_pairs, proto_type, *span))
         }
         RefGet((expr, span)) => {
             let expr_type = check_expr(engine, bindings, expr)?;

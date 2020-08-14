@@ -62,12 +62,18 @@ Call: Box<ast::Expr> = {
 }
 
 
+RecordExtension = {
+    <CallExpr> "|"
+}
 KeyPairExpr = {
     <Spanned<Ident>> "=" <Expr>,
 }
-RecordSub = "{" <SepListOpt<KeyPairExpr, ";">> "}";
+RecordSub = "{" <RecordExtension?> <SepListOpt<KeyPairExpr, ";">> "}";
 Record: Box<ast::Expr> = {
-    Spanned<RecordSub> => Box::new(ast::Expr::Record(<>)),
+    Spanned<RecordSub> => {
+        let ((proto, fields), span) = <>;
+        Box::new(ast::Expr::Record(proto, fields, span))
+    }
 }
 FieldAccess: Box<ast::Expr> = {
     <lhs: SimpleExpr> <rhs: Spanned<("." Ident)>> => Box::new(ast::Expr::FieldAccess(lhs, (rhs.0).1, rhs.1)),

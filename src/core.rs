@@ -91,7 +91,7 @@ fn check_heads(
                 out.push((lhs2, rhs2));
                 Ok(())
             } else if let Some(lhs2) = proto {
-                out.push((lhs2, rhs2));
+                out.push((lhs2, Use(rhs_ind)));
                 Ok(())
             } else {
                 Err(TypeError::new2(
