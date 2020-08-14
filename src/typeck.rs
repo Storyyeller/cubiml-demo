@@ -173,29 +173,61 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             let match_type = check_expr(engine, bindings, match_expr)?;
             let (result_type, result_bound) = engine.var();
 
-            let mut case_names = HashMap::with_capacity(cases.len());
+            // Result types from the match arms
             let mut case_type_pairs = Vec::with_capacity(cases.len());
-            for (((tag, name), case_span), rhs_expr) in cases {
-                if let Some(old_span) = case_names.insert(&*tag, *case_span) {
+            let mut wildcard_type = None;
+
+            // Pattern reachability checking
+            let mut case_names = HashMap::with_capacity(cases.len());
+            let mut wildcard = None;
+
+            for ((pattern, pattern_span), rhs_expr) in cases {
+                if let Some(old_span) = wildcard {
                     return Err(SyntaxError::new2(
-                        "SyntaxError: Repeated match case",
-                        *case_span,
-                        "Note: Case was already matched here",
+                        "SyntaxError: Unreachable match pattern",
+                        *pattern_span,
+                        "Note: Unreachable due to previous wildcard pattern here",
                         old_span,
                     ));
                 }
 
-                let (wrapped_type, wrapped_bound) = engine.var();
-                case_type_pairs.push((tag.clone(), wrapped_bound));
+                use ast::Pattern::*;
+                match pattern {
+                    Case(tag, name) => {
+                        if let Some(old_span) = case_names.insert(&*tag, *pattern_span) {
+                            return Err(SyntaxError::new2(
+                                "SyntaxError: Unreachable match pattern",
+                                *pattern_span,
+                                "Note: Unreachable due to previous case pattern here",
+                                old_span,
+                            ));
+                        }
 
-                let rhs_type = bindings.in_child_scope(|bindings| {
-                    bindings.insert(name.clone(), wrapped_type);
-                    check_expr(engine, bindings, rhs_expr)
-                })?;
-                engine.flow(rhs_type, result_bound)?;
+                        let (wrapped_type, wrapped_bound) = engine.var();
+                        case_type_pairs.push((tag.clone(), wrapped_bound));
+
+                        let rhs_type = bindings.in_child_scope(|bindings| {
+                            bindings.insert(name.clone(), wrapped_type);
+                            check_expr(engine, bindings, rhs_expr)
+                        })?;
+                        engine.flow(rhs_type, result_bound)?;
+                    }
+                    Wildcard(name) => {
+                        wildcard = Some(*pattern_span);
+
+                        let (wrapped_type, wrapped_bound) = engine.var();
+                        wildcard_type = Some(wrapped_bound);
+
+                        let rhs_type = bindings.in_child_scope(|bindings| {
+                            bindings.insert(name.clone(), wrapped_type);
+                            check_expr(engine, bindings, rhs_expr)
+                        })?;
+                        engine.flow(rhs_type, result_bound)?;
+                    }
+                }
             }
 
-            let bound = engine.case_use(case_type_pairs, *span);
+            let bound = engine.case_use(case_type_pairs, wildcard_type, *span);
             engine.flow(match_type, bound)?;
 
             Ok(result_type)
@@ -223,7 +255,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 let t = check_expr(engine, bindings, expr)?;
                 field_type_pairs.push((name.clone(), t));
             }
-            Ok(engine.obj(field_type_pairs, *span))
+            Ok(engine.obj(field_type_pairs, None, *span))
         }
         RefGet((expr, span)) => {
             let expr_type = check_expr(engine, bindings, expr)?;

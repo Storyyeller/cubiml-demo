@@ -170,18 +170,30 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let part1 = js::assign(temp_var.clone(), compile(ctx, match_expr));
 
             let tag_expr = js::field(temp_var.clone(), "$tag".to_string());
-            let val_expr = js::field(temp_var, "$val".to_string());
+            let val_expr = js::field(temp_var.clone(), "$val".to_string());
 
             let mut branches = Vec::new();
-            for (((tag, name), _), rhs_expr) in cases {
-                ctx.ml_scope(|ctx| {
-                    ctx.set_binding(name.to_string(), val_expr.clone());
-                    branches.push((tag, compile(ctx, rhs_expr)));
-                });
+            for ((pattern, _), rhs_expr) in cases {
+                use ast::Pattern::*;
+                match pattern {
+                    Case(tag, name) => {
+                        ctx.ml_scope(|ctx| {
+                            ctx.set_binding(name.to_string(), val_expr.clone());
+                            branches.push((tag.as_str(), compile(ctx, rhs_expr)));
+                        });
+                    }
+                    Wildcard(name) => {
+                        ctx.ml_scope(|ctx| {
+                            ctx.set_binding(name.to_string(), temp_var.clone());
+                            branches.push(("", compile(ctx, rhs_expr)));
+                        });
+                    }
+                }
             }
 
             let mut res = branches.pop().unwrap().1;
             while let Some((tag, rhs_expr)) = branches.pop() {
+                assert!(tag.len() > 0);
                 let cond = js::eqop(tag_expr.clone(), js::lit(format!("\"{}\"", tag)));
                 res = js::ternary(cond, rhs_expr, res);
             }

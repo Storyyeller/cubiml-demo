@@ -36,7 +36,12 @@ pub enum OpType {
 }
 
 type VarDefinition = (String, Box<Expr>);
-type CaseMatchPattern = (String, String);
+
+#[derive(Debug)]
+pub enum Pattern {
+    Case(String, String),
+    Wildcard(String),
+}
 
 #[derive(Debug)]
 pub enum Expr {
@@ -49,7 +54,7 @@ pub enum Expr {
     Let(VarDefinition, Box<Expr>),
     LetRec(Vec<VarDefinition>, Box<Expr>),
     Literal(Literal, Spanned<String>),
-    Match(Box<Expr>, Vec<(Spanned<CaseMatchPattern>, Box<Expr>)>, Span),
+    Match(Box<Expr>, Vec<(Spanned<Pattern>, Box<Expr>)>, Span),
     NewRef(Box<Expr>, Span),
     Record(Spanned<Vec<(Spanned<String>, Box<Expr>)>>),
     RefGet(Spanned<Box<Expr>>),

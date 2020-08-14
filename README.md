@@ -131,23 +131,53 @@ let rec even = fun x -> if x == 0 then true else odd(x - 1)
 
 Sometimes you need to make different decisions based on runtime data in a type safe manner. Cubiml supports this via _case types_, also known as _sum types_ or _enums_. Basically, the way they work is that you can wrap a value with a tag, and then later match against it. The match expression has branches that execute different code depending on the runtime value of the tag. Crucially, each match branch has access to the static type of the original wrapped value for that specific tag. You can think of it like a simpler, statically checked version of Java's vistor pattern or a giant switch statement on an union in C.
 
-To wrap a value, prefix it with a grave (\`) character and an uppercase Tag. E.g. 
-    `Foo {hello="Hello"}
+To wrap a value, prefix it with a grave (\`) character and an uppercase Tag. E.g. `` `Foo {hello="Hello"}``
 
 You can later match on it like follows
 
 ```ocaml
-
 let calculate_area = fun shape ->
     match shape with
-          `Circle v -> v.rad *. v.rad *. 3.1415926
-        | `Rectangle v -> v.length *. v.height
+        | `Circle v -> v.rad *. v.rad *. 3.1415926
+        | `Rectangle v -> v.length *. v.height;
 
 calculate_area `Circle {rad=6.7}
 calculate_area `Rectangle {height=1.1; length=2.2}
 ```
 
 Notice that within the Circle branch, the code can access the rad field, and within the Rectangle branch, it can access the length and height field. Case types and matches let you essentially "unmix" distinct data types after they are mixed together in the program flow. Without case types, this would be impossible to do in a type safe manner.
+
+#### Wildcard matches
+
+Match expressions can optionally end with a wildcard match, which is the same as a regular case match except that it doesn't include a tag. The wildcard branch will be taken if runtime tag of the matched value does not match any of the explicitly listed tags in the match expression.
+
+```ocaml
+let calculate_area = fun shape ->
+    match shape with
+        | `Circle v -> v.rad *. v.rad *. 3.1415926
+        | `Rectangle v -> v.length *. v.height
+        |  v -> "got something unexpected!"
+```
+
+Within a wildcard match, the bound variable has the same type as the input expression, except with the explicitly matched cases statically excluded. For example, in the `calculate_area` example above, `v` would have the type "same as `shape` except not a `Circle` or `Rectangle`".
+
+This makes it possible to further match on the wildcard value elsewhere. For example, in the below code, the new `calculate_area2` function explicitly handles the `Square` case and otherwise defers to the previously defined function to handle the `Circle` and `Rectangle` cases. This works because the compiler knows that the `v` in the wildcard branch is not a `Square`, so it will not complain that the original `calculate_area` function fails to handle squares.
+
+```ocaml
+let calculate_area = fun shape ->
+    match shape with
+        | `Circle v -> v.rad *. v.rad *. 3.1415926
+        | `Rectangle v -> v.length *. v.height;
+
+let calculate_area2 = fun shape ->
+    match shape with
+        | `Square v -> v.len *. v.len
+        |  v -> calculate_area v;
+
+calculate_area2 `Circle {rad=6.7}
+calculate_area2 `Square {len=9.17}
+```
+
 
 
 #### Literals 

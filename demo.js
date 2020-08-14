@@ -79,19 +79,24 @@ const HTML = `
 
     <div id=pane1>
         <textarea id=editor>
-let abs_int =
-    fun x -> if x < 0 then 0 - x else x;
 
-let abs_float =
-    fun x -> if x <. 0. then 0. -. x else x;
+let area = fun x ->
+    match x with
+        | \`Square x -> x.len *. x.len
+        | \`Rect x -> x.height *. x.width;
 
-let rec fib = fun x ->
-    if x <= 1 then
-        1
-    else
-        fib(x - 1) + fib(x - 2);
+area \`Square {len=4.};
+area \`Rect {height=4.; width=2.5};
 
-fib 10
+let area = fun x ->
+    match x with
+        | \`Circle x -> x.radius *. x.radius *. 3.1415926
+        | x -> area x;
+
+area \`Square {len=4.};
+area \`Rect {height=4.; width=2.5};
+area \`Circle {radius=1.2}
+
 
         </textarea>
         <button id=compile-and-run type=button>Compile and run</button>

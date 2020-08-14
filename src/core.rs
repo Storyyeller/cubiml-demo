@@ -18,10 +18,21 @@ enum VTypeHead {
     VFloat,
     VInt,
     VStr,
-    VFunc { arg: Use, ret: Value },
-    VObj { fields: HashMap<String, Value> },
-    VCase { case: (String, Value) },
-    VRef { write: Option<Use>, read: Option<Value> },
+    VFunc {
+        arg: Use,
+        ret: Value,
+    },
+    VObj {
+        fields: HashMap<String, Value>,
+        proto: Option<Value>,
+    },
+    VCase {
+        case: (String, Value),
+    },
+    VRef {
+        write: Option<Use>,
+        read: Option<Value>,
+    },
 }
 #[derive(Debug, Clone)]
 enum UTypeHead {
@@ -29,13 +40,30 @@ enum UTypeHead {
     UFloat,
     UInt,
     UStr,
-    UFunc { arg: Value, ret: Use },
-    UObj { field: (String, Use) },
-    UCase { cases: HashMap<String, Use> },
-    URef { write: Option<Value>, read: Option<Use> },
+    UFunc {
+        arg: Value,
+        ret: Use,
+    },
+    UObj {
+        field: (String, Use),
+    },
+    UCase {
+        cases: HashMap<String, Use>,
+        wildcard: Option<Use>,
+    },
+    URef {
+        write: Option<Value>,
+        read: Option<Use>,
+    },
 }
 
-fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(Value, Use)>) -> Result<(), TypeError> {
+fn check_heads(
+    lhs_ind: ID,
+    lhs: &(VTypeHead, Span),
+    rhs_ind: ID,
+    rhs: &(UTypeHead, Span),
+    out: &mut Vec<(Value, Use)>,
+) -> Result<(), TypeError> {
     use UTypeHead::*;
     use VTypeHead::*;
 
@@ -51,34 +79,50 @@ fn check_heads(lhs: &(VTypeHead, Span), rhs: &(UTypeHead, Span), out: &mut Vec<(
             out.push((arg2, arg1));
             Ok(())
         }
-        (&VObj { fields: ref fields1 }, &UObj { field: (ref name, rhs2) }) => {
+        (
+            &VObj {
+                fields: ref fields1,
+                proto,
+            },
+            &UObj { field: (ref name, rhs2) },
+        ) => {
             // Check if the accessed field is defined
-            match fields1.get(name) {
-                Some(&lhs2) => {
-                    out.push((lhs2, rhs2));
-                    Ok(())
-                }
-                None => Err(TypeError::new2(
+            if let Some(&lhs2) = fields1.get(name) {
+                out.push((lhs2, rhs2));
+                Ok(())
+            } else if let Some(lhs2) = proto {
+                out.push((lhs2, rhs2));
+                Ok(())
+            } else {
+                Err(TypeError::new2(
                     format!("TypeError: Missing field {}\nNote: Field is accessed here", name),
                     rhs.1,
                     "But the record is defined without that field here.",
                     lhs.1,
-                )),
+                ))
             }
         }
-        (&VCase { case: (ref name, lhs2) }, &UCase { cases: ref cases2 }) => {
+        (
+            &VCase { case: (ref name, lhs2) },
+            &UCase {
+                cases: ref cases2,
+                wildcard,
+            },
+        ) => {
             // Check if the right case is handled
-            match cases2.get(name) {
-                Some(&rhs2) => {
-                    out.push((lhs2, rhs2));
-                    Ok(())
-                }
-                None => Err(TypeError::new2(
+            if let Some(&rhs2) = cases2.get(name) {
+                out.push((lhs2, rhs2));
+                Ok(())
+            } else if let Some(rhs2) = wildcard {
+                out.push((Value(lhs_ind), rhs2));
+                Ok(())
+            } else {
+                Err(TypeError::new2(
                     format!("TypeError: Unhandled case {}\nNote: Case originates here", name),
                     lhs.1,
                     "But it is not handled here.",
                     rhs.1,
-                )),
+                ))
             }
         }
         (&VRef { read: r1, write: w1 }, &URef { read: r2, write: w2 }) => {
@@ -170,7 +214,7 @@ impl TypeCheckerCore {
             while let Some((lhs, rhs)) = type_pairs_to_check.pop() {
                 if let TypeNode::Value(lhs_head) = &self.types[lhs] {
                     if let TypeNode::Use(rhs_head) = &self.types[rhs] {
-                        check_heads(lhs_head, rhs_head, &mut pending_edges)?;
+                        check_heads(lhs, lhs_head, rhs, rhs_head, &mut pending_edges)?;
                     }
                 }
             }
@@ -233,9 +277,9 @@ impl TypeCheckerCore {
         self.new_use(UTypeHead::UFunc { arg, ret }, span)
     }
 
-    pub fn obj(&mut self, fields: Vec<(String, Value)>, span: Span) -> Value {
+    pub fn obj(&mut self, fields: Vec<(String, Value)>, proto: Option<Value>, span: Span) -> Value {
         let fields = fields.into_iter().collect();
-        self.new_val(VTypeHead::VObj { fields }, span)
+        self.new_val(VTypeHead::VObj { fields, proto }, span)
     }
     pub fn obj_use(&mut self, field: (String, Use), span: Span) -> Use {
         self.new_use(UTypeHead::UObj { field }, span)
@@ -244,9 +288,9 @@ impl TypeCheckerCore {
     pub fn case(&mut self, case: (String, Value), span: Span) -> Value {
         self.new_val(VTypeHead::VCase { case }, span)
     }
-    pub fn case_use(&mut self, cases: Vec<(String, Use)>, span: Span) -> Use {
+    pub fn case_use(&mut self, cases: Vec<(String, Use)>, wildcard: Option<Use>, span: Span) -> Use {
         let cases = cases.into_iter().collect();
-        self.new_use(UTypeHead::UCase { cases }, span)
+        self.new_use(UTypeHead::UCase { cases, wildcard }, span)
     }
 
     pub fn reference(&mut self, write: Option<Use>, read: Option<Value>, span: Span) -> Value {

@@ -77,19 +77,21 @@ Case: Box<ast::Expr> = {
     <Spanned<Tag>> <CaseExpr> => Box::new(ast::Expr::Case(<>)),
 }
 
-CaseMatchPattern = {
-    Tag Ident,
+MatchPattern: ast::Pattern = {
+    Tag Ident => ast::Pattern::Case(<>),
+    Ident => ast::Pattern::Wildcard(<>),
 }
 MatchArm = {
-    <Spanned<CaseMatchPattern>> "->" <CompareExpr>,
+    "|" <Spanned<MatchPattern>> "->" <CompareExpr>,
 }
-MatchSub = "match" <Spanned<Expr>> "with" <SepList<MatchArm, "|">>;
+MatchSub = "match" <Spanned<Expr>> "with" <MatchArm+>;
 Match: Box<ast::Expr> = {
     MatchSub => {
         let ((param, span), arms) = <>;
         Box::new(ast::Expr::Match(param, arms, span))
     }
 }
+
 
 LetLHS = {
     "let" <Ident> "=" <Expr>,
