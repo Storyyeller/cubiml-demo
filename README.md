@@ -258,6 +258,15 @@ The value you are copying fields from does not have to be a statically known val
 {a=true; b=""; c=true; d=-23}
 ```
 
+#### Comments
+
+Comment support is unfortunately very limited. Comments use `(* *)`. Due to parser limitations, comments can't be nested or contain `*`s and can only appear in certain contexts.
+
+```ocaml
+(* define x = 4 *)
+let x = 4;
+```
+
 
 ## Building cubiml from source
 

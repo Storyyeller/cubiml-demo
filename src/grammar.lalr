@@ -13,6 +13,7 @@ FloatLiteral: String =
 StringLiteral: String =
     <r#""[^\\"\n\r]*(?:\\[tn'"\\][^\\"\n\r]*)*""#> => String::from(<>);
 
+Comment = r#"\(\*[^*]*\*\)"#;
 
 // make sure __proto__ is not considered a valid identifier
 Illegal = "__proto__";
@@ -66,7 +67,7 @@ RecordExtension = {
     <CallExpr> "|"
 }
 KeyPairExpr = {
-    <Spanned<Ident>> "=" <Expr>,
+    Comment* <Spanned<Ident>> "=" <Expr>,
 }
 RecordSub = "{" <RecordExtension?> <SepListOpt<KeyPairExpr, ";">> "}";
 Record: Box<ast::Expr> = {
@@ -88,7 +89,7 @@ MatchPattern: ast::Pattern = {
     Ident => ast::Pattern::Wildcard(<>),
 }
 MatchArm = {
-    "|" <Spanned<MatchPattern>> "->" <CompareExpr>,
+    Comment* "|" <Spanned<MatchPattern>> "->" <CompareExpr>,
 }
 MatchSub = "match" <Spanned<Expr>> "with" <MatchArm+>;
 Match: Box<ast::Expr> = {
@@ -214,7 +215,7 @@ CompareExpr = {
     AddExpr,
     CmpOp,
 }
-Expr = {
+TopLevelExpr = {
     CompareExpr,
     FuncDef,
     If,
@@ -223,11 +224,17 @@ Expr = {
     Match,
     RefSet,
 }
+Expr = {
+    TopLevelExpr,
+    Comment <Expr>,
+}
 
 TopLevelItem: ast::TopLevel = {
     <LetLHS> => ast::TopLevel::LetDef(<>),
     <LetRecLHS> => ast::TopLevel::LetRecDef(<>),
-    <Expr> => ast::TopLevel::Expr(*<>),
+    <TopLevelExpr> => ast::TopLevel::Expr(*<>),
+
+    Comment <TopLevelItem>,
 }
 
 pub Script = {
