@@ -14,6 +14,7 @@ pub enum Op {
     Sub,
     Mult,
     Div,
+    Rem,
 
     Lt,
     Lte,

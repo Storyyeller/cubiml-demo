@@ -6,6 +6,7 @@ pub enum Op {
     Sub,
     Mult,
     Div,
+    Rem,
 
     Lt,
     Lte,
@@ -165,7 +166,7 @@ impl Expr2 {
             Call(..) => CALL,
             Minus(..) => UNARY,
             BinOp(_, _, op) => match op {
-                Mult | Div => MULTIPLICATIVE,
+                Mult | Div | Rem => MULTIPLICATIVE,
                 Add | Sub => ADDITIVE,
                 Lt | Lte | Gt | Gte => RELATIONAL,
                 Eq | Neq => EQUALITY,
@@ -252,6 +253,7 @@ impl Expr2 {
                     Sub => "- ",
                     Mult => "*",
                     Div => "/",
+                    Rem => "%",
 
                     Lt => "<",
                     Lte => "<=",
@@ -347,7 +349,7 @@ impl Expr2 {
             Self::BinOp(lhs, rhs, op) => {
                 use Op::*;
                 let req = match op {
-                    Mult | Div => (MULTIPLICATIVE, EXPONENT),
+                    Mult | Div | Rem => (MULTIPLICATIVE, EXPONENT),
                     Add | Sub => (ADDITIVE, MULTIPLICATIVE),
                     Lt | Lte | Gt | Gte => (RELATIONAL, SHIFT),
                     Eq | Neq => (EQUALITY, RELATIONAL),

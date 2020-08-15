@@ -69,6 +69,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 ast::Op::Sub => js::Op::Sub,
                 ast::Op::Mult => js::Op::Mult,
                 ast::Op::Div => js::Op::Div,
+                ast::Op::Rem => js::Op::Rem,
 
                 ast::Op::Lt => js::Op::Lt,
                 ast::Op::Lte => js::Op::Lte,

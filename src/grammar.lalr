@@ -139,8 +139,10 @@ RefSet: Box<ast::Expr> = {
 MultOpSub: (ast::OpType, ast::Op) = {
     "*" => (ast::OpType::IntOp, ast::Op::Mult),
     "/" => (ast::OpType::IntOp, ast::Op::Div),
+    "%" => (ast::OpType::IntOp, ast::Op::Rem),
     "*." => (ast::OpType::FloatOp, ast::Op::Mult),
     "/." => (ast::OpType::FloatOp, ast::Op::Div),
+    "%." => (ast::OpType::FloatOp, ast::Op::Rem),
 }
 MultOp: Box<ast::Expr> = {
     Spanned<(Spanned<MultExpr> MultOpSub Spanned<CallExpr>)> => {
