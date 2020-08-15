@@ -1,6 +1,8 @@
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::error;
 use std::fmt;
+use std::rc::Rc;
 
 use crate::ast;
 use crate::core::*;
@@ -8,9 +10,15 @@ use crate::spans::{Span, SpannedError as SyntaxError};
 
 type Result<T> = std::result::Result<T, SyntaxError>;
 
+#[derive(Clone)]
+enum Scheme {
+    Mono(Value),
+    Poly(Rc<dyn Fn(&mut TypeCheckerCore) -> Result<Value>>),
+}
+
 struct Bindings {
-    m: HashMap<String, Value>,
-    changes: Vec<(String, Option<Value>)>,
+    m: HashMap<String, Scheme>,
+    changes: Vec<(String, Option<Scheme>)>,
 }
 impl Bindings {
     fn new() -> Self {
@@ -20,13 +28,17 @@ impl Bindings {
         }
     }
 
-    fn get(&self, k: &str) -> Option<Value> {
-        self.m.get(k).copied()
+    fn get(&self, k: &str) -> Option<&Scheme> {
+        self.m.get(k)
+    }
+
+    fn insert_scheme(&mut self, k: String, v: Scheme) {
+        let old = self.m.insert(k.clone(), v);
+        self.changes.push((k, old));
     }
 
     fn insert(&mut self, k: String, v: Value) {
-        let old = self.m.insert(k.clone(), v);
-        self.changes.push((k, old));
+        self.insert_scheme(k, Scheme::Mono(v))
     }
 
     fn unwind(&mut self, n: usize) {
@@ -138,25 +150,14 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             Ok(merged)
         }
         Let((name, var_expr), rest_expr) => {
-            let var_type = check_expr(engine, bindings, var_expr)?;
+            let var_scheme = check_let(engine, bindings, var_expr)?;
             bindings.in_child_scope(|bindings| {
-                bindings.insert(name.clone(), var_type);
+                bindings.insert_scheme(name.clone(), var_scheme);
                 check_expr(engine, bindings, rest_expr)
             })
         }
         LetRec(defs, rest_expr) => bindings.in_child_scope(|bindings| {
-            let mut temp_bounds = Vec::with_capacity(defs.len());
-            for (name, _) in defs {
-                let (temp_type, temp_bound) = engine.var();
-                bindings.insert(name.clone(), temp_type);
-                temp_bounds.push(temp_bound);
-            }
-
-            for ((_, expr), bound) in defs.iter().zip(temp_bounds) {
-                let var_type = check_expr(engine, bindings, expr)?;
-                engine.flow(var_type, bound)?;
-            }
-
+            check_let_rec_defs(engine, bindings, defs)?;
             check_expr(engine, bindings, rest_expr)
         }),
         Literal(type_, (code, span)) => {
@@ -277,10 +278,74 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(lhs_type, bound)?;
             Ok(rhs_type)
         }
-        Variable((name, span)) => bindings
-            .get(name.as_str())
-            .ok_or_else(|| SyntaxError::new1(format!("SyntaxError: Undefined variable {}", name), *span)),
+        Variable((name, span)) => {
+            if let Some(scheme) = bindings.get(name.as_str()) {
+                match scheme {
+                    Scheme::Mono(v) => Ok(*v),
+                    Scheme::Poly(cb) => cb(engine),
+                }
+            } else {
+                Err(SyntaxError::new1(format!("SyntaxError: Undefined variable {}", name), *span))
+            }
+        }
     }
+}
+
+fn check_let(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::Expr) -> Result<Scheme> {
+    if let ast::Expr::FuncDef(..) = expr {
+        let saved_bindings = RefCell::new(Bindings {
+            m: bindings.m.clone(),
+            changes: Vec::new(),
+        });
+        let saved_expr = expr.clone();
+
+        let f: Rc<dyn Fn(&mut TypeCheckerCore) -> Result<Value>> =
+            Rc::new(move |engine| check_expr(engine, &mut saved_bindings.borrow_mut(), &saved_expr));
+
+        f(engine)?;
+        Ok(Scheme::Poly(f))
+    } else {
+        let var_type = check_expr(engine, bindings, expr)?;
+        Ok(Scheme::Mono(var_type))
+    }
+}
+
+fn check_let_rec_defs(
+    engine: &mut TypeCheckerCore,
+    bindings: &mut Bindings,
+    defs: &Vec<(String, Box<ast::Expr>)>,
+) -> Result<()> {
+    let saved_bindings = RefCell::new(Bindings {
+        m: bindings.m.clone(),
+        changes: Vec::new(),
+    });
+    let saved_defs = defs.clone();
+
+    let f: Rc<dyn Fn(&mut TypeCheckerCore, usize) -> Result<Value>> = Rc::new(move |engine, i| {
+        saved_bindings.borrow_mut().in_child_scope(|bindings| {
+            let mut temp_vars = Vec::with_capacity(saved_defs.len());
+            for (name, _) in &saved_defs {
+                let (temp_type, temp_bound) = engine.var();
+                bindings.insert(name.clone(), temp_type);
+                temp_vars.push((temp_type, temp_bound));
+            }
+
+            for ((_, expr), (_, bound)) in saved_defs.iter().zip(&temp_vars) {
+                let var_type = check_expr(engine, bindings, expr)?;
+                engine.flow(var_type, *bound)?;
+            }
+
+            Ok(temp_vars[i].0)
+        })
+    });
+    f(engine, 0)?;
+
+    for (i, (name, _)) in defs.iter().enumerate() {
+        let f = f.clone();
+        let scheme = Scheme::Poly(Rc::new(move |engine| f(engine, i)));
+        bindings.insert_scheme(name.clone(), scheme);
+    }
+    Ok(())
 }
 
 fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &ast::TopLevel) -> Result<()> {
@@ -290,21 +355,11 @@ fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &a
             check_expr(engine, bindings, expr)?;
         }
         LetDef((name, var_expr)) => {
-            let var_type = check_expr(engine, bindings, var_expr)?;
-            bindings.insert(name.clone(), var_type);
+            let var_scheme = check_let(engine, bindings, var_expr)?;
+            bindings.insert_scheme(name.clone(), var_scheme);
         }
         LetRecDef(defs) => {
-            let mut temp_bounds = Vec::with_capacity(defs.len());
-            for (name, _) in defs {
-                let (temp_type, temp_bound) = engine.var();
-                bindings.insert(name.clone(), temp_type);
-                temp_bounds.push(temp_bound);
-            }
-
-            for ((_, expr), bound) in defs.iter().zip(temp_bounds) {
-                let var_type = check_expr(engine, bindings, expr)?;
-                engine.flow(var_type, bound)?;
-            }
+            check_let_rec_defs(engine, bindings, defs)?;
         }
     };
     Ok(())

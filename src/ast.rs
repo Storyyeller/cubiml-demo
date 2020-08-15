@@ -1,6 +1,6 @@
 use crate::spans::{Span, Spanned};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Bool,
     Float,
@@ -8,7 +8,7 @@ pub enum Literal {
     Str,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Op {
     Add,
     Sub,
@@ -25,7 +25,7 @@ pub enum Op {
     Neq,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OpType {
     IntOp,
     FloatOp,
@@ -38,13 +38,13 @@ pub enum OpType {
 
 type VarDefinition = (String, Box<Expr>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Pattern {
     Case(String, String),
     Wildcard(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     BinOp(Spanned<Box<Expr>>, Spanned<Box<Expr>>, OpType, Op, Span),
     Call(Box<Expr>, Box<Expr>, Span),
@@ -63,7 +63,7 @@ pub enum Expr {
     Variable(Spanned<String>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TopLevel {
     Expr(Expr),
     LetDef(VarDefinition),
