@@ -11,7 +11,7 @@ IntLiteral: String = <r"-?(?:0|[1-9][[:digit:]]*)"> => String::from(<>);
 FloatLiteral: String =
     <r"-?(?:0|[1-9][[:digit:]]*)\.[[:digit:]]*(?:[eE]-?[[:digit:]]+)?"> => String::from(<>);
 StringLiteral: String =
-    <r#""[^\\"]*(?:\\[tn'"\\][^\\"]*)*""#> => String::from(<>);
+    <r#""[^\\"\n\r]*(?:\\[tn'"\\][^\\"\n\r]*)*""#> => String::from(<>);
 
 
 // make sure __proto__ is not considered a valid identifier
