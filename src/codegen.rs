@@ -47,10 +47,14 @@ impl ModuleBuilder {
         self.changes.push((k, old));
     }
 
-    fn new_var(&mut self, ml_name: &str) -> js::Expr {
+    fn new_var_name(&mut self) -> String {
         let js_name = format!("v{}", self.var_counter);
         self.var_counter += 1;
+        js_name
+    }
 
+    fn new_var(&mut self, ml_name: &str) -> js::Expr {
+        let js_name = self.new_var_name();
         let expr = js::field(self.scope_expr.clone(), js_name);
         self.set_binding(ml_name.to_string(), expr.clone());
         expr
@@ -137,7 +141,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             ast::Literal::Bool(v) => Bool(*v),
         }),
         ast::Expr::Match(match_expr, cases) => {
-            let temp_var = js::field(ctx.scope_expr.clone(), "$".to_string());
+            let temp_var = js::field(ctx.scope_expr.clone(), ctx.new_var_name());
             let part1 = js::assign(temp_var.clone(), compile(ctx, match_expr));
 
             let tag_expr = js::field(temp_var.clone(), "$tag".to_string());
