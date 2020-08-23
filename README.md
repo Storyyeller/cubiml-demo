@@ -199,13 +199,15 @@ false;
 
 #### Operators
 
-Use `+, -, *, /, %` for integer math and `<, <=, >, >=` for integer comparisons. For floating point math and comparisons, add a `.` to the end of the operator, e.g. `7.5 /. 12.0`. String concatenation is `^`. `==` and `!=` compare values of any type (values of different types compare unequal).
+Use `+, -, *, /, %` for integer math. For floating point math, add a `.` to the end of the operator, e.g. `7.5 /. 12.0`. String concatenation is `^`. 
+
+`<, <=, >, >=` can compare both ints and floats. `==` and `!=` compare values of any type (values of different types compare unequal).
 
 ```ocaml
 5 * 2 + 1;
 -1 <= 0;
 7.5 /. 12.0;
-0.0 <=. 0.1;
+0 > 0.1;
 9 == "what?";
 "Hello," ^ " World!";
 "" != {}

@@ -31,8 +31,7 @@ pub enum OpType {
     FloatOp,
     StrOp,
 
-    IntCmp,
-    FloatCmp,
+    IntOrFloatCmp,
     AnyCmp,
 }
 

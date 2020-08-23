@@ -40,6 +40,7 @@ enum UTypeHead {
     UFloat,
     UInt,
     UStr,
+    UIntOrFloat,
     UFunc {
         arg: Value,
         ret: Use,
@@ -72,6 +73,8 @@ fn check_heads(
         (&VFloat, &UFloat) => Ok(()),
         (&VInt, &UInt) => Ok(()),
         (&VStr, &UStr) => Ok(()),
+        (&VInt, &UIntOrFloat) => Ok(()),
+        (&VFloat, &UIntOrFloat) => Ok(()),
 
         (&VFunc { arg: arg1, ret: ret1 }, &UFunc { arg: arg2, ret: ret2 }) => {
             out.push((ret1, ret2));
@@ -169,6 +172,7 @@ fn check_heads(
                 UFloat => "float",
                 UInt => "integer",
                 UStr => "string",
+                UIntOrFloat => "float or integer",
                 UFunc { .. } => "function",
                 UObj { .. } => "record",
                 UCase { .. } => "case",
@@ -268,6 +272,9 @@ impl TypeCheckerCore {
     }
     pub fn str_use(&mut self, span: Span) -> Use {
         self.new_use(UTypeHead::UStr, span)
+    }
+    pub fn int_or_float_use(&mut self, span: Span) -> Use {
+        self.new_use(UTypeHead::UIntOrFloat, span)
     }
 
     pub fn func(&mut self, arg: Use, ret: Value, span: Span) -> Value {

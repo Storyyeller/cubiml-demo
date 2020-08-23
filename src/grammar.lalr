@@ -112,7 +112,7 @@ Let: Box<ast::Expr> = {
 
 
 LetRecDef = {
-    <Ident> "=" <FuncDef>,
+    <Ident> "=" Comment* <FuncDef>,
 }
 LetRecLHS = {
     "let" "rec" <SepList<LetRecDef, "and">>,
@@ -164,15 +164,10 @@ AddOp: Box<ast::Expr> = {
     },
 }
 CmpOpSub: (ast::OpType, ast::Op) = {
-    "<" => (ast::OpType::IntCmp, ast::Op::Lt),
-    "<=" => (ast::OpType::IntCmp, ast::Op::Lte),
-    ">" => (ast::OpType::IntCmp, ast::Op::Gt),
-    ">=" => (ast::OpType::IntCmp, ast::Op::Gte),
-
-    "<." => (ast::OpType::FloatCmp, ast::Op::Lt),
-    "<=." => (ast::OpType::FloatCmp, ast::Op::Lte),
-    ">." => (ast::OpType::FloatCmp, ast::Op::Gt),
-    ">=." => (ast::OpType::FloatCmp, ast::Op::Gte),
+    "<" => (ast::OpType::IntOrFloatCmp, ast::Op::Lt),
+    "<=" => (ast::OpType::IntOrFloatCmp, ast::Op::Lte),
+    ">" => (ast::OpType::IntOrFloatCmp, ast::Op::Gt),
+    ">=" => (ast::OpType::IntOrFloatCmp, ast::Op::Gte),
 
     "==" => (ast::OpType::AnyCmp, ast::Op::Eq),
     "!=" => (ast::OpType::AnyCmp, ast::Op::Neq),

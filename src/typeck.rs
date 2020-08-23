@@ -90,16 +90,9 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                     engine.flow(rhs_type, rhs_bound)?;
                     engine.str(*full_span)
                 }
-                IntCmp => {
-                    let lhs_bound = engine.int_use(*lhs_span);
-                    let rhs_bound = engine.int_use(*rhs_span);
-                    engine.flow(lhs_type, lhs_bound)?;
-                    engine.flow(rhs_type, rhs_bound)?;
-                    engine.bool(*full_span)
-                }
-                FloatCmp => {
-                    let lhs_bound = engine.float_use(*lhs_span);
-                    let rhs_bound = engine.float_use(*rhs_span);
+                IntOrFloatCmp => {
+                    let lhs_bound = engine.int_or_float_use(*lhs_span);
+                    let rhs_bound = engine.int_or_float_use(*rhs_span);
                     engine.flow(lhs_type, lhs_bound)?;
                     engine.flow(rhs_type, rhs_bound)?;
                     engine.bool(*full_span)
