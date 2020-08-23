@@ -17,6 +17,7 @@ enum VTypeHead {
     VBool,
     VFloat,
     VInt,
+    VNull,
     VStr,
     VFunc {
         arg: Use,
@@ -161,6 +162,7 @@ fn check_heads(
                 VBool => "boolean",
                 VFloat => "float",
                 VInt => "integer",
+                VNull => "null",
                 VStr => "string",
                 VFunc { .. } => "function",
                 VObj { .. } => "record",
@@ -256,6 +258,9 @@ impl TypeCheckerCore {
     }
     pub fn int(&mut self, span: Span) -> Value {
         self.new_val(VTypeHead::VInt, span)
+    }
+    pub fn null(&mut self, span: Span) -> Value {
+        self.new_val(VTypeHead::VNull, span)
     }
     pub fn str(&mut self, span: Span) -> Value {
         self.new_val(VTypeHead::VStr, span)

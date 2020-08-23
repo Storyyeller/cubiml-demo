@@ -257,7 +257,7 @@ class Printer {
         }
         if (type === 'function') {this.parts.push('<fun>'); return;}
         if (type === 'symbol') {this.parts.push('<sym>'); return;}
-        if (e === null) {this.parts.push('<null>'); return;}
+        if (e === null) {this.parts.push('null'); return;}
         if (e === undefined) {this.parts.push('<undefined>'); return;}
 
         if (this.seen.has(e)) {this.parts.push('...'); return;}

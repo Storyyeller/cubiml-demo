@@ -5,6 +5,7 @@ pub enum Literal {
     Bool,
     Float,
     Int,
+    Null,
     Str,
 }
 

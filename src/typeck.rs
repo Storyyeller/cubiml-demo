@@ -160,6 +160,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 Bool => engine.bool(span),
                 Float => engine.float(span),
                 Int => engine.int(span),
+                Null => engine.null(span),
                 Str => engine.str(span),
             })
         }

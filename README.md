@@ -180,11 +180,12 @@ calculate_area2 `Square {len=9.17}
 
 #### Literals 
 
-Cubiml has boolean, int, float, and string literals. Integers are arbitrary precision and can't have leading zeros. Floating point literals must contain a decimal point, but the fraction part is optional. Strings are double quoted and use backslash escapes.
+Cubiml has boolean, int, float, string, and null literals. Integers are arbitrary precision and can't have leading zeros. Floating point literals must contain a decimal point, but the fraction part is optional. Strings are double quoted and use backslash escapes.
 
 ```ocaml
 true;
 false;
+null;
 0;
 -213132;
 999999999999999999999999999999999999999999999999;

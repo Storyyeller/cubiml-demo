@@ -38,6 +38,7 @@ VarOrLiteral: Box<ast::Expr> = {
     Spanned<Ident> => Box::new(
         match <>.0.as_str() {
             "false" | "true" => ast::Expr::Literal(ast::Literal::Bool, <>),
+            "null" => ast::Expr::Literal(ast::Literal::Null, <>),
             _ => ast::Expr::Variable(<>)
         }
     ),
