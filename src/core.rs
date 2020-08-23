@@ -12,6 +12,8 @@ pub struct Value(ID);
 #[derive(Copy, Clone, Debug)]
 pub struct Use(ID);
 
+pub type LazyFlow = (Value, Use);
+
 #[derive(Debug, Clone)]
 enum VTypeHead {
     VBool,
@@ -50,8 +52,8 @@ enum UTypeHead {
         field: (String, Use),
     },
     UCase {
-        cases: HashMap<String, Use>,
-        wildcard: Option<Use>,
+        cases: HashMap<String, (Use, LazyFlow)>,
+        wildcard: Option<(Use, LazyFlow)>,
     },
     URef {
         write: Option<Value>,
@@ -117,11 +119,13 @@ fn check_heads(
             },
         ) => {
             // Check if the right case is handled
-            if let Some(&rhs2) = cases2.get(name) {
+            if let Some((rhs2, lazy_flow)) = cases2.get(name).copied() {
                 out.push((lhs2, rhs2));
+                out.push(lazy_flow);
                 Ok(())
-            } else if let Some(rhs2) = wildcard {
+            } else if let Some((rhs2, lazy_flow)) = wildcard {
                 out.push((Value(lhs_ind), rhs2));
+                out.push(lazy_flow);
                 Ok(())
             } else {
                 Err(TypeError::new2(
@@ -312,7 +316,7 @@ impl TypeCheckerCore {
     pub fn case(&mut self, case: (String, Value), span: Span) -> Value {
         self.new_val(VTypeHead::VCase { case }, span)
     }
-    pub fn case_use(&mut self, cases: Vec<(String, Use)>, wildcard: Option<Use>, span: Span) -> Use {
+    pub fn case_use(&mut self, cases: Vec<(String, (Use, LazyFlow))>, wildcard: Option<(Use, LazyFlow)>, span: Span) -> Use {
         let cases = cases.into_iter().collect();
         self.new_use(UTypeHead::UCase { cases, wildcard }, span)
     }

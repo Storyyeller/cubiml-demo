@@ -232,25 +232,23 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                         }
 
                         let (wrapped_type, wrapped_bound) = engine.var();
-                        case_type_pairs.push((tag.clone(), wrapped_bound));
-
                         let rhs_type = bindings.in_child_scope(|bindings| {
                             bindings.insert(name.clone(), wrapped_type);
                             check_expr(engine, bindings, rhs_expr)
                         })?;
-                        engine.flow(rhs_type, result_bound)?;
+
+                        case_type_pairs.push((tag.clone(), (wrapped_bound, (rhs_type, result_bound))));
                     }
                     Wildcard(name) => {
                         wildcard = Some(*pattern_span);
 
                         let (wrapped_type, wrapped_bound) = engine.var();
-                        wildcard_type = Some(wrapped_bound);
-
                         let rhs_type = bindings.in_child_scope(|bindings| {
                             bindings.insert(name.clone(), wrapped_type);
                             check_expr(engine, bindings, rhs_expr)
                         })?;
-                        engine.flow(rhs_type, result_bound)?;
+
+                        wildcard_type = Some((wrapped_bound, (rhs_type, result_bound)));
                     }
                 }
             }
