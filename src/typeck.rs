@@ -130,6 +130,39 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             Ok(engine.func(arg_bound, body_type, *span))
         }
         If((cond_expr, span), then_expr, else_expr) => {
+            // Handle conditions of the form foo == null and foo != null specially
+            if let BinOp((lhs, _), (rhs, _), ast::OpType::AnyCmp, op, ..) = &**cond_expr {
+                if let Variable((name, _)) = &**lhs {
+                    if let Literal(ast::Literal::Null, ..) = **rhs {
+                        if let Some(scheme) = bindings.get(name.as_str()) {
+                            if let Scheme::Mono(lhs_type) = scheme {
+                                // Flip order of branches if they wrote if foo == null instead of !=
+                                let (ok_expr, else_expr) = match op {
+                                    ast::Op::Neq => (then_expr, else_expr),
+                                    ast::Op::Eq => (else_expr, then_expr),
+                                    _ => unreachable!(),
+                                };
+
+                                let (nnvar_type, nnvar_bound) = engine.var();
+                                let bound = engine.null_check_use(nnvar_bound, *span);
+                                engine.flow(*lhs_type, bound)?;
+
+                                let ok_type = bindings.in_child_scope(|bindings| {
+                                    bindings.insert(name.clone(), nnvar_type);
+                                    check_expr(engine, bindings, ok_expr)
+                                })?;
+                                let else_type = check_expr(engine, bindings, else_expr)?;
+
+                                let (merged, merged_bound) = engine.var();
+                                engine.flow(ok_type, merged_bound)?;
+                                engine.flow(else_type, merged_bound)?;
+                                return Ok(merged);
+                            }
+                        }
+                    }
+                }
+            }
+
             let cond_type = check_expr(engine, bindings, cond_expr)?;
             let bound = engine.bool_use(*span);
             engine.flow(cond_type, bound)?;

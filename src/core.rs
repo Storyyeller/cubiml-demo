@@ -57,6 +57,9 @@ enum UTypeHead {
         write: Option<Value>,
         read: Option<Use>,
     },
+    UNullCase {
+        nonnull: Use,
+    },
 }
 
 fn check_heads(
@@ -129,6 +132,7 @@ fn check_heads(
                 ))
             }
         }
+
         (&VRef { read: r1, write: w1 }, &URef { read: r2, write: w2 }) => {
             if let Some(r2) = r2 {
                 if let Some(r1) = r1 {
@@ -157,6 +161,13 @@ fn check_heads(
             }
             Ok(())
         }
+
+        (&VNull, &UNullCase { .. }) => Ok(()),
+        (_, &UNullCase { nonnull }) => {
+            out.push((Value(lhs_ind), nonnull));
+            Ok(())
+        }
+
         _ => {
             let found = match lhs.0 {
                 VBool => "boolean",
@@ -179,6 +190,7 @@ fn check_heads(
                 UObj { .. } => "record",
                 UCase { .. } => "case",
                 URef { .. } => "ref",
+                UNullCase { .. } => unreachable!(),
             };
 
             Err(TypeError::new2(
@@ -310,6 +322,10 @@ impl TypeCheckerCore {
     }
     pub fn reference_use(&mut self, write: Option<Value>, read: Option<Use>, span: Span) -> Use {
         self.new_use(UTypeHead::URef { write, read }, span)
+    }
+
+    pub fn null_check_use(&mut self, nonnull: Use, span: Span) -> Use {
+        self.new_use(UTypeHead::UNullCase { nonnull }, span)
     }
 
     pub fn save(&self) -> SavePoint {
