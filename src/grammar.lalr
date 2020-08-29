@@ -7,13 +7,21 @@ grammar(ctx: &mut spans::SpanMaker<'input>);
 Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z0-9]\w*"> => String::from(<>);
 
-IntLiteral: String = <r"-?(?:0|[1-9][[:digit:]]*)"> => String::from(<>);
+IntLiteral: String = {
+    <r"-?(?:0|[1-9][[:digit:]]*)"> => String::from(<>),
+    r"00" "Numbers can`t have leading zeros" => "0".to_string(),
+};
 FloatLiteral: String =
     <r"-?(?:0|[1-9][[:digit:]]*)\.[[:digit:]]*(?:[eE]-?[[:digit:]]+)?"> => String::from(<>);
 StringLiteral: String =
     <r#""[^\\"\n\r]*(?:\\[tn'"\\][^\\"\n\r]*)*""#> => String::from(<>);
 
-Comment = r#"\(\*[^*]*\*\)"#;
+CommentRest = {
+    ")",
+    ") Sorry, comments can`t contain *s unless you`re closing them like *)",
+};
+Comment = r#"\(\*[^*]*\*"# CommentRest;
+
 
 // make sure __proto__ is not considered a valid identifier
 Illegal = "__proto__";
