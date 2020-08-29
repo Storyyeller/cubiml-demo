@@ -79,7 +79,20 @@ const HTML = `
 
     <div id=pane1>
         <textarea id=editor>
+(* calculate fibonacci numbers recursively *)
+let fib =
+    let rec fib_sub = fun args ->
+        if args.n <= 1 then
+            args.a
+        else
+            let n = args.n - 1 in
+            let a = args.a + args.b in
+            let b = args.a in
+            fib_sub {n=n; a=a; b=b}
+        in
+    fun n -> fib_sub {n=n; a=1; b=1};
 
+(* matching on case types *)
 let area = fun x ->
     match x with
         | \`Square x -> x.len *. x.len
@@ -88,6 +101,8 @@ let area = fun x ->
 area \`Square {len=4.};
 area \`Rect {height=4.; width=2.5};
 
+(* wildcard match delegates to first area function
+    for the non-Circle cases in a type safe manner *)
 let area = fun x ->
     match x with
         | \`Circle x -> x.radius *. x.radius *. 3.1415926
@@ -95,7 +110,11 @@ let area = fun x ->
 
 area \`Square {len=4.};
 area \`Rect {height=4.; width=2.5};
-area \`Circle {radius=1.2}
+area \`Circle {radius=1.2};
+
+(* ints are arbitrary precision *)
+(* 999th fibonacci number = 43466557686937456435688527675040625802564660517371780402481729089536555417949051890403879840079255169295922593080322634775209689623239873322471161642996440906533187938298969649928516003704476137795166849228875 *)
+fib 999
 
 
         </textarea>
