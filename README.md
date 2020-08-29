@@ -7,6 +7,8 @@ You can try out cubiml online in your browser at https://storyyeller.github.io/c
 
 ## A quick tour of cubiml
 
+Cubiml syntax is mostly a subset of Ocaml syntax. If you're not familiar with Ocaml syntax, checkout the guide below.
+
 #### Conditionals
 
 In cubiml `if` is an expression, not a statement. The general form is `if <expr> then <expr> else <expr>` where the `<expr>`s are sub-expressions. The first expression is evaluated, and depending on whether it is true or false, one of the other two subexpressions is evaluated, and the result of the `if` expression is that expression's value. For example, evaluating `if false then "Hello" else "World"` would result in `"World"`. You can think of this as similar to the ternary operator (`a ? b : c`) present in some programming languages.
@@ -263,11 +265,31 @@ The value you are copying fields from does not have to be a statically known val
 
 #### Comments
 
-Comment support is unfortunately very limited. Comments use `(* *)`. Due to parser limitations, comments can't be nested or contain `*`s and can only appear in certain contexts.
+Comment support is somewhat limited. Comments use `(* *)`. Due to parser limitations, comments can't be nested or contain `*`s. You can put comments before match arms, before record fields, and before expressions wherever a let declaration or function definition would be allowed. To put them in front of expressions with higher precedence, surround it in parenthesis first.
 
 ```ocaml
 (* define x = 4 *)
 let x = 4;
+
+let y = x + (
+    (* 2 is an int *) 
+    (* we needed the ()s around 2 here since + has higher precdence *)
+    2
+);
+
+let z = (* let's define a new record! *) {
+    (* a is a record field *)
+    a = x;
+
+    b = 
+        (* comments can also go before expressions *) 
+        "Hello world!";
+
+    c = match `Some y with
+        | `Some y -> y
+        (* this match arm isn't actually reachable *)
+        | `None _ -> _
+}
 ```
 
 
