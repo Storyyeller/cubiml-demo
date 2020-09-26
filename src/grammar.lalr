@@ -73,7 +73,7 @@ Call: Box<ast::Expr> = {
 
 
 RecordExtension = {
-    <CallExpr> "|"
+    <CallExpr> "with"
 }
 KeyPairExpr = {
     Comment* <Spanned<Ident>> "=" <Expr>,

@@ -248,17 +248,17 @@ ref 42
 
 #### Record extension
 
-When creating a record, you can optionally copy over all the fields from another record by writing `foo |` at the start of the record, where `foo` is the record you want to copy from.
+When creating a record, you can optionally copy over all the fields from another record by writing `foo with` at the start of the record, where `foo` is the record you want to copy from.
 
 ```ocaml
 let foo = {a=1; b=""; c=false};
-let bar = {foo | a=true; d=-23}
+let bar = {foo with a=true; d=-23}
 ```
 
 The value you are copying fields from does not have to be a statically known value. It can be any arbitrary expression (as long as you surround it in parenthesis).
 
 ```
->> let baz = {(if foo.c then foo else bar) | c=true}
+>> let baz = {(if foo.c then foo else bar) with c=true}
 
 {a=true; b=""; c=true; d=-23}
 ```
