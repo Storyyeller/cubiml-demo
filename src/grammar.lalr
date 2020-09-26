@@ -190,11 +190,75 @@ CmpOp: Box<ast::Expr> = {
 
 
 
+
+
+
+
+
+
+
+RecordTypeExtension = <Spanned<Ident>> "with";
+KeyPairType = {
+    <Spanned<Ident>> ":" <Type>,
+}
+RecordTypeSub = "{" <RecordTypeExtension?> <SepList<KeyPairType, ";">> "}";
+RecordType: Box<ast::TypeExpr> = {
+    Spanned<RecordTypeSub> => {
+        let ((ext, fields), span) = <>;
+        Box::new(ast::TypeExpr::Record(ext, fields, span))
+    }
+}
+
+CaseTypeExtension = <Spanned<Ident>> "|";
+VariantType = <Spanned<Tag>> "of" <NoFunType>;
+CaseTypeSub = "[" <CaseTypeExtension?> <SepList<VariantType, "|">> "]";
+CaseType: Box<ast::TypeExpr> = {
+    Spanned<CaseTypeSub> => {
+        let ((ext, cases), span) = <>;
+        Box::new(ast::TypeExpr::Case(ext, cases, span))
+    }
+}
+FuncTypeSub = <NoFunType> "->" <Type>;
+FuncType: Box<ast::TypeExpr> = {
+    Spanned<FuncTypeSub> => Box::new(ast::TypeExpr::Func(<>)),
+}
+RefReadability: ast::Readability = {
+    "readonly" "ref" => ast::Readability::ReadOnly,
+    "writeonly" "ref" => ast::Readability::WriteOnly,
+    "ref" => ast::Readability::ReadWrite,
+}
+RefType: Box<ast::TypeExpr> = {
+    NoFunType Spanned<RefReadability> => Box::new(ast::TypeExpr::Ref(<>)),
+}
+QMark: spans::Span = Spanned<"?"> => <>.1;
+NullableType: Box<ast::TypeExpr> = {
+    NoFunType QMark => Box::new(ast::TypeExpr::Nullable(<>)),
+}
+
+NoFunType: Box<ast::TypeExpr> = {
+    Spanned<Ident> => Box::new(ast::TypeExpr::Ident(<>)),
+    RecordType,
+    CaseType,
+    RefType,
+    NullableType,
+    "(" <Type> ")",
+}
+Type: Box<ast::TypeExpr> = {
+    NoFunType,
+    FuncType,
+}
+
+
+
+
+
+
 SimpleExpr = {
     FieldAccess,
     Record,
     VarOrLiteral,
     "(" <Expr> ")",
+    "(" <Expr> ":" <Type> ")" => Box::new(ast::Expr::Typed(<>)),
 }
 RefExpr = {
     SimpleExpr,

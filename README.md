@@ -292,6 +292,28 @@ let z = (* let's define a new record! *) {
 }
 ```
 
+#### Type annotations
+
+Expressions can manually be annotated with a type via `(expr : type)`, e.g. `(24 : int)` or `(fun x -> x : str -> str)`. Type annotations can be one of the following:
+
+Base types: `bool`, `float`, `int`, `str`, `null`, and `number`. `number` represents a value that can be an `int` _or_ a `float`.
+
+Functions: `type -> type`
+
+Nullable types: `type?`
+
+References: `type ref`, `type readonly ref`, or `type writeonly ref`
+
+Records: `{field1: type1; field2: type2}`
+
+Case types: `[tag1 of type1 | tag2 of type2]`
+
+Holes: `_` serves as a placeholder that effectively gets filled in with the corresponding part of the inferred type. It is useful if you only want to constrain part of the type with a type annotation. 
+
+For example if you have a record `foo`, with fields `a` and `b` you could write `(foo : {a: int; b: _})` to ensure `foo.a` is an int while placing no constraints on `foo.b`. 
+
+`_` can also be used to extend record and case type annotations with any number of fields or tags not specified. For example the above example could also be written `(foo : {_ with a: int})`. This says that `foo` has a field named `a` that is an `int` and can have any number of other fields with any types. Likewise you can write types like ``[_ | `A of int | `B of str]`` to represent a case type where the `A` tag has type `int`, the `B` tag has type `str`, and there can be any number of other tags not specified with any types.
+
 
 ## Building cubiml from source
 

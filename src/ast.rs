@@ -60,7 +60,26 @@ pub enum Expr {
     Record(Option<Box<Expr>>, Vec<(Spanned<String>, Box<Expr>)>, Span),
     RefGet(Spanned<Box<Expr>>),
     RefSet(Spanned<Box<Expr>>, Box<Expr>),
+    Typed(Box<Expr>, Box<TypeExpr>),
     Variable(Spanned<String>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Readability {
+    ReadWrite,
+    ReadOnly,
+    WriteOnly,
+}
+
+type TypeExtension = Spanned<String>;
+#[derive(Debug, Clone)]
+pub enum TypeExpr {
+    Case(Option<TypeExtension>, Vec<(Spanned<String>, Box<TypeExpr>)>, Span),
+    Func(Spanned<(Box<TypeExpr>, Box<TypeExpr>)>),
+    Ident(Spanned<String>),
+    Nullable(Box<TypeExpr>, Span),
+    Record(Option<TypeExtension>, Vec<(Spanned<String>, Box<TypeExpr>)>, Span),
+    Ref(Box<TypeExpr>, Spanned<Readability>),
 }
 
 #[derive(Debug, Clone)]

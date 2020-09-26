@@ -59,6 +59,128 @@ impl Bindings {
     }
 }
 
+fn check_row_var(ext: &(String, Span)) -> Result<()> {
+    if ext.0 != "_" {
+        Err(SyntaxError::new1("SyntaxError: Row extension must be _", ext.1))
+    } else {
+        Ok(())
+    }
+}
+
+fn parse_type_signature(
+    engine: &mut TypeCheckerCore,
+    bindings: &mut Bindings,
+    tyexpr: &ast::TypeExpr,
+) -> Result<(Value, Use)> {
+    use ast::TypeExpr::*;
+    match tyexpr {
+        Case(ext, cases, span) => {
+            // Create a dummy variable to use as the lazy flow values
+            let dummy = engine.var();
+            let (res, res_bound) = engine.var();
+
+            let bound_wildcard = if let Some(ext) = ext {
+                check_row_var(ext)?;
+                Some((res_bound, dummy))
+            } else {
+                None
+            };
+
+            let mut bound_case_arms = Vec::new();
+            for ((tag, tag_span), wrapped_expr) in cases {
+                let wrapped_type = parse_type_signature(engine, bindings, wrapped_expr)?;
+
+                let case_value = engine.case((tag.clone(), wrapped_type.0), *tag_span);
+                engine.flow(case_value, res_bound)?;
+                bound_case_arms.push((tag.clone(), (wrapped_type.1, dummy)));
+            }
+
+            let bound = engine.case_use(bound_case_arms, bound_wildcard, *span);
+            Ok((res, bound))
+        }
+        Func(((lhs, rhs), span)) => {
+            let lhs_type = parse_type_signature(engine, bindings, lhs)?;
+            let rhs_type = parse_type_signature(engine, bindings, rhs)?;
+
+            let bound = engine.func_use(lhs_type.0, rhs_type.1, *span);
+            let res = engine.func(lhs_type.1, rhs_type.0, *span);
+            Ok((res, bound))
+        }
+        Ident((s, span)) => match s.as_str() {
+            "bool" => Ok((engine.bool(*span), engine.bool_use(*span))),
+            "float" => Ok((engine.float(*span), engine.float_use(*span))),
+            "int" => Ok((engine.int(*span), engine.int_use(*span))),
+            "null" => Ok((engine.null(*span), engine.null_use(*span))),
+            "str" => Ok((engine.str(*span), engine.str_use(*span))),
+            "number" => {
+                let res = engine.var();
+                let float_lit = engine.float(*span);
+                let int_lit = engine.int(*span);
+                engine.flow(float_lit, res.1)?;
+                engine.flow(int_lit, res.1)?;
+                Ok((res.0, engine.int_or_float_use(*span)))
+            }
+            "_" => Ok(engine.var()),
+            _ => Err(SyntaxError::new1(
+                "SyntaxError: Unrecognized simple type (choices are bool, float, int, str, number, null, or _)",
+                *span,
+            )),
+        },
+        Nullable(lhs, span) => {
+            let lhs_type = parse_type_signature(engine, bindings, lhs)?;
+            let bound = engine.null_check_use(lhs_type.1, *span);
+
+            let res = engine.var();
+            let null_lit = engine.null(*span);
+            engine.flow(lhs_type.0, res.1)?;
+            engine.flow(null_lit, res.1)?;
+            Ok((res.0, bound))
+        }
+        Record(ext, fields, span) => {
+            let (temp, temp_bound) = engine.var();
+
+            let res_wildcard = if let Some(ext) = ext {
+                check_row_var(ext)?;
+                Some(temp)
+            } else {
+                None
+            };
+
+            let mut res_fields = Vec::new();
+
+            for ((name, name_span), wrapped_expr) in fields {
+                let wrapped_type = parse_type_signature(engine, bindings, wrapped_expr)?;
+
+                let obj_use = engine.obj_use((name.clone(), wrapped_type.1), *name_span);
+                engine.flow(temp, obj_use)?;
+                res_fields.push((name.clone(), wrapped_type.0));
+            }
+
+            let res = engine.obj(res_fields, res_wildcard, *span);
+            Ok((res, temp_bound))
+        }
+        Ref(lhs, (rw, span)) => {
+            use ast::Readability::*;
+            let lhs_type = parse_type_signature(engine, bindings, lhs)?;
+
+            let write = if *rw == ReadOnly {
+                (None, None)
+            } else {
+                (Some(lhs_type.1), Some(lhs_type.0))
+            };
+            let read = if *rw == WriteOnly {
+                (None, None)
+            } else {
+                (Some(lhs_type.0), Some(lhs_type.1))
+            };
+
+            let res = engine.reference(write.0, read.0, *span);
+            let bound = engine.reference_use(write.1, read.1, *span);
+            Ok((res, bound))
+        }
+    }
+}
+
 fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::Expr) -> Result<Value> {
     use ast::Expr::*;
 
@@ -302,6 +424,12 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             let bound = engine.reference_use(Some(rhs_type), None, *lhs_span);
             engine.flow(lhs_type, bound)?;
             Ok(rhs_type)
+        }
+        Typed(expr, sig) => {
+            let expr_type = check_expr(engine, bindings, expr)?;
+            let sig_type = parse_type_signature(engine, bindings, sig)?;
+            engine.flow(expr_type, sig_type.1)?;
+            Ok(sig_type.0)
         }
         Variable((name, span)) => {
             if let Some(scheme) = bindings.get(name.as_str()) {

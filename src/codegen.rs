@@ -220,6 +220,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let rhs = compile(ctx, rhs_expr);
             js::assign(js::field(lhs, "$p".to_string()), rhs)
         }
+        ast::Expr::Typed(expr, _) => compile(ctx, expr),
         ast::Expr::Variable((name, _)) => ctx.bindings.get(name).unwrap().clone(),
     }
 }
