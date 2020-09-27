@@ -59,14 +59,6 @@ impl Bindings {
     }
 }
 
-fn check_row_var(ext: &(String, Span)) -> Result<()> {
-    if ext.0 != "_" {
-        Err(SyntaxError::new1("SyntaxError: Row extension must be _", ext.1))
-    } else {
-        Ok(())
-    }
-}
-
 fn parse_type_signature(
     engine: &mut TypeCheckerCore,
     bindings: &mut Bindings,
@@ -80,8 +72,9 @@ fn parse_type_signature(
             let (vtype, vtype_bound) = engine.var();
 
             let utype_wildcard = if let Some(ext) = ext {
-                check_row_var(ext)?;
-                Some((vtype_bound, dummy))
+                let ext_type = parse_type_signature(engine, bindings, ext)?;
+                engine.flow(ext_type.0, vtype_bound)?;
+                Some((ext_type.1, dummy))
             } else {
                 None
             };
@@ -140,8 +133,9 @@ fn parse_type_signature(
             let (utype_value, utype) = engine.var();
 
             let vtype_wildcard = if let Some(ext) = ext {
-                check_row_var(ext)?;
-                Some(utype_value)
+                let ext_type = parse_type_signature(engine, bindings, ext)?;
+                engine.flow(utype_value, ext_type.1)?;
+                Some(ext_type.0)
             } else {
                 None
             };

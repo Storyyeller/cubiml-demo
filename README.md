@@ -292,23 +292,53 @@ let z = (* let's define a new record! *) {
 }
 ```
 
-#### Type annotations
+### Type annotations
 
 Expressions can manually be annotated with a type via `(expr : type)`, e.g. `(24 : int)` or `(fun x -> x : str -> str)`. Type annotations can be one of the following:
 
-Base types: `bool`, `float`, `int`, `str`, `null`, and `number`. `number` represents a value that can be an `int` _or_ a `float`.
+#### Base types
 
-Functions: `type -> type`
+`bool`, `float`, `int`, `str`, `null`, and `number`. `number` represents a value that can be an `int` _or_ a `float`.
 
-Nullable types: `type?`
+#### Functions types
 
-References: `type ref`, `type readonly ref`, or `type writeonly ref`
+`type -> type`
 
-Records: `{field1: type1; field2: type2}`
+#### Nullable types
 
-Case types: `[tag1 of type1 | tag2 of type2]`
+`type?`
 
-Holes: `_` serves as a placeholder that effectively gets filled in with the corresponding part of the inferred type. It is useful if you only want to constrain part of the type with a type annotation. 
+#### Reference types
+
+`type ref`, `type readonly ref`, or `type writeonly ref`
+
+#### Record types
+
+Explicit list of fields:
+
+`{field1: type1; field2: type2}`
+
+Explicit list of fields plus any number of fields not mentioned:
+
+`{_ with field1: type1; field2: type2}`
+
+Note: The list of fields cannot be empty. `{}` is not a valid type annotation.
+
+#### Case types 
+
+Explicit list of cases:
+
+`[tag1 of type1 | tag2 of type2]`
+
+Explicit list of cases plus any number of cases not mentioned:
+
+`[_ | tag1 of type1 | tag2 of type2]`
+
+Note: The list of cases cannot be empty. `[]` is not a valid type annotation.
+
+#### Type variables
+
+`_` creates a fresh type variable. Effectively, this leaves a hole which gets filled in with the corresponding part of the inferred type. It is useful if you only want to constrain part of the type with a type annotation. 
 
 For example if you have a record `foo`, with fields `a` and `b` you could write `(foo : {a: int; b: _})` to ensure `foo.a` is an int while placing no constraints on `foo.b`. 
 

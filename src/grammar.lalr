@@ -197,7 +197,7 @@ CmpOp: Box<ast::Expr> = {
 
 
 
-RecordTypeExtension = <Spanned<Ident>> "with";
+RecordTypeExtension = <Type> "with";
 KeyPairType = {
     <Spanned<Ident>> ":" <Type>,
 }
@@ -209,7 +209,7 @@ RecordType: Box<ast::TypeExpr> = {
     }
 }
 
-CaseTypeExtension = <Spanned<Ident>> "|";
+CaseTypeExtension = <Type> "|";
 VariantType = <Spanned<Tag>> "of" <NoFunType>;
 CaseTypeSub = "[" <CaseTypeExtension?> <SepList<VariantType, "|">> "]";
 CaseType: Box<ast::TypeExpr> = {
