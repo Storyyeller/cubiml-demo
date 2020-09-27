@@ -298,7 +298,11 @@ Expressions can manually be annotated with a type via `(expr : type)`, e.g. `(24
 
 #### Base types
 
-`bool`, `float`, `int`, `str`, `null`, and `number`. `number` represents a value that can be an `int` _or_ a `float`.
+The primitive types are `bool`, `float`, `int`, `str`, `null`, `number`, `top`, `bot`. 
+
+`number` represents a value that can be an `int` _or_ a `float`.
+
+`top` is the supertype of all types. `bot` is the subtype of all types. It's impossible to do anything useful with a value of type `top`, while it is impossible to _create_ a value of type `bot`. 
 
 #### Nullable types
 
@@ -324,7 +328,7 @@ Explicit list of fields plus any number of fields not mentioned:
 
 `{_ with field1: type1; field2: type2}`
 
-Note: The list of fields cannot be empty. `{}` is not a valid type annotation.
+Note: The list of fields cannot be empty. `{}` is not a valid type annotation. Use `top` instead.
 
 #### Case types 
 
@@ -336,7 +340,7 @@ Explicit list of cases plus any number of cases not mentioned:
 
 `[_ | tag1 of type1 | tag2 of type2]`
 
-Note: The list of cases cannot be empty. `[]` is not a valid type annotation.
+Note: The list of cases cannot be empty. `[]` is not a valid type annotation. Use `bot` instead.
 
 #### Holes
 

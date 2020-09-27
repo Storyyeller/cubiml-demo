@@ -125,16 +125,34 @@ fn parse_type(
             "null" => Ok((engine.null(*span), engine.null_use(*span))),
             "str" => Ok((engine.str(*span), engine.str_use(*span))),
             "number" => {
-                let vtype = engine.var();
+                let (vtype, vtype_bound) = engine.var();
                 let float_lit = engine.float(*span);
                 let int_lit = engine.int(*span);
-                engine.flow(float_lit, vtype.1)?;
-                engine.flow(int_lit, vtype.1)?;
-                Ok((vtype.0, engine.int_or_float_use(*span)))
+                engine.flow(float_lit, vtype_bound)?;
+                engine.flow(int_lit, vtype_bound)?;
+                Ok((vtype, engine.int_or_float_use(*span)))
+            }
+            "top" => {
+                let (_, utype) = engine.var();
+                let (vtype, vtype_bound) = engine.var();
+                let float_lit = engine.float(*span);
+                let bool_lit = engine.bool(*span);
+                engine.flow(float_lit, vtype_bound)?;
+                engine.flow(bool_lit, vtype_bound)?;
+                Ok((vtype, utype))
+            }
+            "bot" => {
+                let (vtype, _) = engine.var();
+                let (utype_value, utype) = engine.var();
+                let float_lit = engine.float_use(*span);
+                let bool_lit = engine.bool_use(*span);
+                engine.flow(utype_value, float_lit)?;
+                engine.flow(utype_value, bool_lit)?;
+                Ok((vtype, utype))
             }
             "_" => Ok(engine.var()),
             _ => Err(SyntaxError::new1(
-                "SyntaxError: Unrecognized simple type (choices are bool, float, int, str, number, null, or _)",
+                "SyntaxError: Unrecognized simple type (choices are bool, float, int, str, number, null, top, bot, or _)",
                 *span,
             )),
         },
