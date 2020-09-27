@@ -300,13 +300,15 @@ Expressions can manually be annotated with a type via `(expr : type)`, e.g. `(24
 
 `bool`, `float`, `int`, `str`, `null`, and `number`. `number` represents a value that can be an `int` _or_ a `float`.
 
+#### Nullable types
+
+`type?`
+
 #### Functions types
 
 `type -> type`
 
-#### Nullable types
-
-`type?`
+Function type arrows have the lowest precedence. For example `int -> int?` is parsed as `int -> (int?)`, i.e. a function that takes an int and returns an int or null. To represent a _function_ or null, you need to instead write `(int -> int)?`.
 
 #### Reference types
 
@@ -336,13 +338,29 @@ Explicit list of cases plus any number of cases not mentioned:
 
 Note: The list of cases cannot be empty. `[]` is not a valid type annotation.
 
-#### Type variables
+#### Holes
 
 `_` creates a fresh type variable. Effectively, this leaves a hole which gets filled in with the corresponding part of the inferred type. It is useful if you only want to constrain part of the type with a type annotation. 
 
 For example if you have a record `foo`, with fields `a` and `b` you could write `(foo : {a: int; b: _})` to ensure `foo.a` is an int while placing no constraints on `foo.b`. 
 
 `_` can also be used to extend record and case type annotations with any number of fields or tags not specified. For example the above example could also be written `(foo : {_ with a: int})`. This says that `foo` has a field named `a` that is an `int` and can have any number of other fields with any types. Likewise you can write types like ``[_ | `A of int | `B of str]`` to represent a case type where the `A` tag has type `int`, the `B` tag has type `str`, and there can be any number of other tags not specified with any types.
+
+#### Recursive types
+
+You can give an explicit name to a type via `type as 'name` and then reference it later via `'name`. This lets you express recursive types. For example, the following code demonstrates a type annotation with a simple recursive list type:
+
+```ocaml
+let rec build_list = fun n ->
+    if n < 0 then
+        null
+    else
+        {val=n; next=build_list (n - 1)};
+
+let list = (build_list 4 : {val: int; next: 'list}? as 'list)
+```
+
+Type aliases can appear anywhere within a type annotation, not just at the top level. This means you can define multiple type variables within a type annotation, allowing you to express mutually recursive types.
 
 
 ## Building cubiml from source

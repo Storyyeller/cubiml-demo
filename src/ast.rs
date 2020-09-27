@@ -73,12 +73,14 @@ pub enum Readability {
 
 #[derive(Debug, Clone)]
 pub enum TypeExpr {
+    Alias(Box<TypeExpr>, Spanned<String>),
     Case(Option<Box<TypeExpr>>, Vec<(Spanned<String>, Box<TypeExpr>)>, Span),
     Func(Spanned<(Box<TypeExpr>, Box<TypeExpr>)>),
     Ident(Spanned<String>),
     Nullable(Box<TypeExpr>, Span),
     Record(Option<Box<TypeExpr>>, Vec<(Spanned<String>, Box<TypeExpr>)>, Span),
     Ref(Box<TypeExpr>, Spanned<Readability>),
+    TypeVar(Spanned<String>),
 }
 
 #[derive(Debug, Clone)]

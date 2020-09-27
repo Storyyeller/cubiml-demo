@@ -235,8 +235,13 @@ NullableType: Box<ast::TypeExpr> = {
     NoFunType QMark => Box::new(ast::TypeExpr::Nullable(<>)),
 }
 
+TypeVar = "'" <Ident>;
+
 NoFunType: Box<ast::TypeExpr> = {
     Spanned<Ident> => Box::new(ast::TypeExpr::Ident(<>)),
+    <NoFunType> "as" <Spanned<TypeVar>> => Box::new(ast::TypeExpr::Alias(<>)),
+    Spanned<TypeVar> => Box::new(ast::TypeExpr::TypeVar(<>)),
+
     RecordType,
     CaseType,
     RefType,

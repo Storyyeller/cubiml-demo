@@ -59,20 +59,39 @@ impl Bindings {
     }
 }
 
-fn parse_type_signature(
+fn parse_type(
     engine: &mut TypeCheckerCore,
-    bindings: &mut Bindings,
+    bindings: &mut HashMap<String, ((Value, Use), Span)>,
     tyexpr: &ast::TypeExpr,
 ) -> Result<(Value, Use)> {
     use ast::TypeExpr::*;
     match tyexpr {
+        Alias(lhs, (name, span)) => {
+            let (utype_value, utype) = engine.var();
+            let (vtype, vtype_bound) = engine.var();
+
+            let old = bindings.insert(name.to_string(), ((utype_value, vtype_bound), *span));
+            if let Some((_, old_span)) = old {
+                return Err(SyntaxError::new2(
+                    format!("SyntaxError: Redefinition of type variable '{}", name),
+                    *span,
+                    "Note: Type variable was already defined here",
+                    old_span,
+                ));
+            }
+
+            let lhs_type = parse_type(engine, bindings, lhs)?;
+            engine.flow(lhs_type.0, vtype_bound)?;
+            engine.flow(utype_value, lhs_type.1)?;
+            Ok((vtype, utype))
+        }
         Case(ext, cases, span) => {
             // Create a dummy variable to use as the lazy flow values
             let dummy = engine.var();
             let (vtype, vtype_bound) = engine.var();
 
             let utype_wildcard = if let Some(ext) = ext {
-                let ext_type = parse_type_signature(engine, bindings, ext)?;
+                let ext_type = parse_type(engine, bindings, ext)?;
                 engine.flow(ext_type.0, vtype_bound)?;
                 Some((ext_type.1, dummy))
             } else {
@@ -81,7 +100,7 @@ fn parse_type_signature(
 
             let mut utype_case_arms = Vec::new();
             for ((tag, tag_span), wrapped_expr) in cases {
-                let wrapped_type = parse_type_signature(engine, bindings, wrapped_expr)?;
+                let wrapped_type = parse_type(engine, bindings, wrapped_expr)?;
 
                 let case_value = engine.case((tag.clone(), wrapped_type.0), *tag_span);
                 engine.flow(case_value, vtype_bound)?;
@@ -92,8 +111,8 @@ fn parse_type_signature(
             Ok((vtype, utype))
         }
         Func(((lhs, rhs), span)) => {
-            let lhs_type = parse_type_signature(engine, bindings, lhs)?;
-            let rhs_type = parse_type_signature(engine, bindings, rhs)?;
+            let lhs_type = parse_type(engine, bindings, lhs)?;
+            let rhs_type = parse_type(engine, bindings, rhs)?;
 
             let utype = engine.func_use(lhs_type.0, rhs_type.1, *span);
             let vtype = engine.func(lhs_type.1, rhs_type.0, *span);
@@ -120,7 +139,7 @@ fn parse_type_signature(
             )),
         },
         Nullable(lhs, span) => {
-            let lhs_type = parse_type_signature(engine, bindings, lhs)?;
+            let lhs_type = parse_type(engine, bindings, lhs)?;
             let utype = engine.null_check_use(lhs_type.1, *span);
 
             let (vtype, vtype_bound) = engine.var();
@@ -133,7 +152,7 @@ fn parse_type_signature(
             let (utype_value, utype) = engine.var();
 
             let vtype_wildcard = if let Some(ext) = ext {
-                let ext_type = parse_type_signature(engine, bindings, ext)?;
+                let ext_type = parse_type(engine, bindings, ext)?;
                 engine.flow(utype_value, ext_type.1)?;
                 Some(ext_type.0)
             } else {
@@ -143,7 +162,7 @@ fn parse_type_signature(
             let mut vtype_fields = Vec::new();
 
             for ((name, name_span), wrapped_expr) in fields {
-                let wrapped_type = parse_type_signature(engine, bindings, wrapped_expr)?;
+                let wrapped_type = parse_type(engine, bindings, wrapped_expr)?;
 
                 let obj_use = engine.obj_use((name.clone(), wrapped_type.1), *name_span);
                 engine.flow(utype_value, obj_use)?;
@@ -155,7 +174,7 @@ fn parse_type_signature(
         }
         Ref(lhs, (rw, span)) => {
             use ast::Readability::*;
-            let lhs_type = parse_type_signature(engine, bindings, lhs)?;
+            let lhs_type = parse_type(engine, bindings, lhs)?;
 
             let write = if *rw == ReadOnly {
                 (None, None)
@@ -172,7 +191,22 @@ fn parse_type_signature(
             let utype = engine.reference_use(write.1, read.1, *span);
             Ok((vtype, utype))
         }
+        TypeVar((name, span)) => {
+            if let Some((res, _)) = bindings.get(name.as_str()) {
+                Ok(*res)
+            } else {
+                Err(SyntaxError::new1(
+                    format!("SyntaxError: Undefined type variable {}", name),
+                    *span,
+                ))
+            }
+        }
     }
+}
+
+fn parse_type_signature(engine: &mut TypeCheckerCore, tyexpr: &ast::TypeExpr) -> Result<(Value, Use)> {
+    let mut bindings = HashMap::new();
+    parse_type(engine, &mut bindings, tyexpr)
 }
 
 fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::Expr) -> Result<Value> {
@@ -421,7 +455,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
         }
         Typed(expr, sig) => {
             let expr_type = check_expr(engine, bindings, expr)?;
-            let sig_type = parse_type_signature(engine, bindings, sig)?;
+            let sig_type = parse_type_signature(engine, sig)?;
             engine.flow(expr_type, sig_type.1)?;
             Ok(sig_type.0)
         }
