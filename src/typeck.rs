@@ -77,34 +77,34 @@ fn parse_type_signature(
         Case(ext, cases, span) => {
             // Create a dummy variable to use as the lazy flow values
             let dummy = engine.var();
-            let (res, res_bound) = engine.var();
+            let (vtype, vtype_bound) = engine.var();
 
-            let bound_wildcard = if let Some(ext) = ext {
+            let utype_wildcard = if let Some(ext) = ext {
                 check_row_var(ext)?;
-                Some((res_bound, dummy))
+                Some((vtype_bound, dummy))
             } else {
                 None
             };
 
-            let mut bound_case_arms = Vec::new();
+            let mut utype_case_arms = Vec::new();
             for ((tag, tag_span), wrapped_expr) in cases {
                 let wrapped_type = parse_type_signature(engine, bindings, wrapped_expr)?;
 
                 let case_value = engine.case((tag.clone(), wrapped_type.0), *tag_span);
-                engine.flow(case_value, res_bound)?;
-                bound_case_arms.push((tag.clone(), (wrapped_type.1, dummy)));
+                engine.flow(case_value, vtype_bound)?;
+                utype_case_arms.push((tag.clone(), (wrapped_type.1, dummy)));
             }
 
-            let bound = engine.case_use(bound_case_arms, bound_wildcard, *span);
-            Ok((res, bound))
+            let utype = engine.case_use(utype_case_arms, utype_wildcard, *span);
+            Ok((vtype, utype))
         }
         Func(((lhs, rhs), span)) => {
             let lhs_type = parse_type_signature(engine, bindings, lhs)?;
             let rhs_type = parse_type_signature(engine, bindings, rhs)?;
 
-            let bound = engine.func_use(lhs_type.0, rhs_type.1, *span);
-            let res = engine.func(lhs_type.1, rhs_type.0, *span);
-            Ok((res, bound))
+            let utype = engine.func_use(lhs_type.0, rhs_type.1, *span);
+            let vtype = engine.func(lhs_type.1, rhs_type.0, *span);
+            Ok((vtype, utype))
         }
         Ident((s, span)) => match s.as_str() {
             "bool" => Ok((engine.bool(*span), engine.bool_use(*span))),
@@ -113,12 +113,12 @@ fn parse_type_signature(
             "null" => Ok((engine.null(*span), engine.null_use(*span))),
             "str" => Ok((engine.str(*span), engine.str_use(*span))),
             "number" => {
-                let res = engine.var();
+                let vtype = engine.var();
                 let float_lit = engine.float(*span);
                 let int_lit = engine.int(*span);
-                engine.flow(float_lit, res.1)?;
-                engine.flow(int_lit, res.1)?;
-                Ok((res.0, engine.int_or_float_use(*span)))
+                engine.flow(float_lit, vtype.1)?;
+                engine.flow(int_lit, vtype.1)?;
+                Ok((vtype.0, engine.int_or_float_use(*span)))
             }
             "_" => Ok(engine.var()),
             _ => Err(SyntaxError::new1(
@@ -128,36 +128,36 @@ fn parse_type_signature(
         },
         Nullable(lhs, span) => {
             let lhs_type = parse_type_signature(engine, bindings, lhs)?;
-            let bound = engine.null_check_use(lhs_type.1, *span);
+            let utype = engine.null_check_use(lhs_type.1, *span);
 
-            let res = engine.var();
+            let (vtype, vtype_bound) = engine.var();
             let null_lit = engine.null(*span);
-            engine.flow(lhs_type.0, res.1)?;
-            engine.flow(null_lit, res.1)?;
-            Ok((res.0, bound))
+            engine.flow(lhs_type.0, vtype_bound)?;
+            engine.flow(null_lit, vtype_bound)?;
+            Ok((vtype, utype))
         }
         Record(ext, fields, span) => {
-            let (temp, temp_bound) = engine.var();
+            let (utype_value, utype) = engine.var();
 
-            let res_wildcard = if let Some(ext) = ext {
+            let vtype_wildcard = if let Some(ext) = ext {
                 check_row_var(ext)?;
-                Some(temp)
+                Some(utype_value)
             } else {
                 None
             };
 
-            let mut res_fields = Vec::new();
+            let mut vtype_fields = Vec::new();
 
             for ((name, name_span), wrapped_expr) in fields {
                 let wrapped_type = parse_type_signature(engine, bindings, wrapped_expr)?;
 
                 let obj_use = engine.obj_use((name.clone(), wrapped_type.1), *name_span);
-                engine.flow(temp, obj_use)?;
-                res_fields.push((name.clone(), wrapped_type.0));
+                engine.flow(utype_value, obj_use)?;
+                vtype_fields.push((name.clone(), wrapped_type.0));
             }
 
-            let res = engine.obj(res_fields, res_wildcard, *span);
-            Ok((res, temp_bound))
+            let vtype = engine.obj(vtype_fields, vtype_wildcard, *span);
+            Ok((vtype, utype))
         }
         Ref(lhs, (rw, span)) => {
             use ast::Readability::*;
@@ -174,9 +174,9 @@ fn parse_type_signature(
                 (Some(lhs_type.0), Some(lhs_type.1))
             };
 
-            let res = engine.reference(write.0, read.0, *span);
-            let bound = engine.reference_use(write.1, read.1, *span);
-            Ok((res, bound))
+            let vtype = engine.reference(write.0, read.0, *span);
+            let utype = engine.reference_use(write.1, read.1, *span);
+            Ok((vtype, utype))
         }
     }
 }
