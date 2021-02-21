@@ -8,11 +8,11 @@ Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z0-9]\w*"> => String::from(<>);
 
 IntLiteral: String = {
-    <r"-?(?:0|[1-9][[:digit:]]*)"> => String::from(<>),
+    <r"-?(?:0|[1-9][0-9]*)"> => String::from(<>),
     r"0\d" "Numbers can`t have leading zeros" => "0".to_string(),
 };
 FloatLiteral: String =
-    <r"-?(?:0|[1-9][[:digit:]]*)\.[[:digit:]]*(?:[eE]-?[[:digit:]]+)?"> => String::from(<>);
+    <r"-?(?:0|[1-9][0-9]*)\.[0-9]*(?:[eE]-?[0-9]+)?"> => String::from(<>);
 StringLiteral: String =
     <r#""[^\\"\n\r]*(?:\\[tn'"\\][^\\"\n\r]*)*""#> => String::from(<>);
 

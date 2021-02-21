@@ -300,7 +300,7 @@ impl Expr2 {
         use Expr2::*;
         let dummy = Literal("".to_string());
         let temp = std::mem::replace(self, dummy);
-        std::mem::replace(self, Paren(Box::new(temp)));
+        *self = Paren(Box::new(temp));
     }
 
     fn ensure(&mut self, required: Precedence) {
