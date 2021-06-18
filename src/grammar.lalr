@@ -61,15 +61,14 @@ If: Box<ast::Expr> = {
 }
 
 
-KeyPairPattern = {
-    Comment* <Spanned<Ident>> "=" <BoxedLetPattern>,
+KeyPairPattern: (spans::Spanned<String>, Box<ast::LetPattern>) = {
+    Comment* <name: Spanned<Ident>> "=" <pat: LetPattern> => (name, Box::new(pat)),
+    Comment* <name: Spanned<Ident>> => (name.clone(), Box::new(ast::LetPattern::Var(name.0))),
 }
 LetPattern: ast::LetPattern = {
     <Ident> => ast::LetPattern::Var(<>),
     "{" <SepList<KeyPairPattern, ";">> "}" => ast::LetPattern::Record(<>),
 }
-BoxedLetPattern: Box<ast::LetPattern> = <LetPattern> => Box::new(<>);
-
 
 FuncSub = "fun" <LetPattern> "->" <Expr>;
 FuncDef: Box<ast::Expr> = {
@@ -86,8 +85,9 @@ Call: Box<ast::Expr> = {
 RecordExtension = {
     <CallExpr> "with"
 }
-KeyPairExpr = {
+KeyPairExpr: (spans::Spanned<String>, Box<ast::Expr>) = {
     Comment* <Spanned<Ident>> "=" <Expr>,
+    Comment* <name: Spanned<Ident>> => (name.clone(), Box::new(ast::Expr::Variable(name))),
 }
 RecordSub = "{" <RecordExtension?> <SepListOpt<KeyPairExpr, ";">> "}";
 Record: Box<ast::Expr> = {

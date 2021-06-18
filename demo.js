@@ -81,14 +81,14 @@ const HTML = `
         <textarea id=editor>
 (* calculate fibonacci numbers recursively *)
 let fib =
-    let rec fib_sub = fun args ->
-        if args.n <= 1 then
-            args.a
+    let rec fib_sub = fun {n; a; b} ->
+        if n <= 1 then
+            a
         else
-            let n = args.n - 1 in
-            let a = args.a + args.b in
-            let b = args.a in
-            fib_sub {n=n; a=a; b=b}
+            let n = n - 1 in
+            let a2= a + b in
+            let b = a in
+            fib_sub {n; a=a2; b}
         in
     fun n -> fib_sub {n=n; a=1; b=1};
 

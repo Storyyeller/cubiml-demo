@@ -17,6 +17,8 @@ In cubiml `if` is an expression, not a statement. The general form is `if <expr>
 
 Records are a grouping of zero or more named values similar to "objects" or "structs" in other programming languages and are defined via `{name1=val1; name2=val2; ...}`. You can access the value of a field using the usual `.name` syntax. For example `{a=true; b="Hello"; c={}}.b` would evaluate to `"Hello"`.
 
+There is a special shorthand syntax for fields with the same name as their value - `{a; b; c=4}` is equivalent to `{a=a; b=b; c=4}`.
+
 #### Functions
 
 In cubiml, all functions are required to take exactly one argument for simplicity. They are defined by `fun <arg> -> <expr>`. For example, a function which returns its argument unchanged could be written as `fun x -> x`. Functions are called by simply suffixing an argument, i.e. writing `a b` where `a` is the function to be called and `b` is the argument. For example 
@@ -39,13 +41,23 @@ function sum(a, b) {
 sum(7, 8)
 ```
 
-in cubiml, you could do something like
+in cubiml, you can do
 
 ```ocaml
 let sum = fun args -> args.a + args.b;
 
 sum {a=7; b=8}
 ```
+
+In fact, you can simplify this further using destructuring patterns:
+
+```ocaml
+let sum = fun {a; b} -> a + b;
+
+sum {a=7; b=8}
+```
+
+
 
 #### Let bindings
 
