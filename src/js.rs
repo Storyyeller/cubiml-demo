@@ -59,15 +59,8 @@ pub fn comma_list(mut exprs: Vec<Expr>) -> Expr {
     Expr(res)
 }
 
-pub fn func(arg: String, scope: String, body: Expr) -> Expr {
-    let mut body = body.0;
-
-    // body can't be an expression starting with "{"
-    if body.first() == Token::BRACE {
-        body.wrap_in_parens();
-    }
-
-    Expr(Expr2::ArrowFunc(arg, scope, Box::new(body)))
+pub fn func(arg: Expr, scope: String, body: Expr) -> Expr {
+    Expr(Expr2::ArrowFunc(Box::new(arg.0), scope, Box::new(body.0)))
 }
 
 pub fn obj(spread: Option<Expr>, fields: Vec<(String, Expr)>) -> Expr {
@@ -148,7 +141,7 @@ enum Expr2 {
     Ternary(Box<Expr2>, Box<Expr2>, Box<Expr2>),
 
     Assignment(Box<Expr2>, Box<Expr2>),
-    ArrowFunc(String, String, Box<Expr2>),
+    ArrowFunc(Box<Expr2>, String, Box<Expr2>),
 
     Comma(Box<Expr2>, Box<Expr2>),
 }
@@ -282,7 +275,7 @@ impl Expr2 {
             }
             Self::ArrowFunc(arg, scope_arg, body) => {
                 *out += "(";
-                *out += arg;
+                arg.write(out);
                 *out += ", ";
                 *out += scope_arg;
                 *out += "={}) => ";
@@ -374,6 +367,7 @@ impl Expr2 {
                 rhs.ensure(ASSIGN);
             }
             Self::ArrowFunc(arg, scope_arg, body) => {
+                arg.add_parens();
                 body.add_parens();
                 body.ensure(ASSIGN);
                 // body can't be an expression starting with "{"

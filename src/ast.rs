@@ -39,7 +39,13 @@ pub enum OpType {
 type VarDefinition = (String, Box<Expr>);
 
 #[derive(Debug, Clone)]
-pub enum Pattern {
+pub enum LetPattern {
+    Var(String),
+    Record(Vec<(Spanned<String>, Box<LetPattern>)>),
+}
+
+#[derive(Debug, Clone)]
+pub enum MatchPattern {
     Case(String, String),
     Wildcard(String),
 }
@@ -50,12 +56,12 @@ pub enum Expr {
     Call(Box<Expr>, Box<Expr>, Span),
     Case(Spanned<String>, Box<Expr>),
     FieldAccess(Box<Expr>, String, Span),
-    FuncDef(Spanned<(String, Box<Expr>)>),
+    FuncDef(Spanned<(LetPattern, Box<Expr>)>),
     If(Spanned<Box<Expr>>, Box<Expr>, Box<Expr>),
     Let(VarDefinition, Box<Expr>),
     LetRec(Vec<VarDefinition>, Box<Expr>),
     Literal(Literal, Spanned<String>),
-    Match(Box<Expr>, Vec<(Spanned<Pattern>, Box<Expr>)>, Span),
+    Match(Box<Expr>, Vec<(Spanned<MatchPattern>, Box<Expr>)>, Span),
     NewRef(Box<Expr>, Span),
     Record(Option<Box<Expr>>, Vec<(Spanned<String>, Box<Expr>)>, Span),
     RefGet(Spanned<Box<Expr>>),

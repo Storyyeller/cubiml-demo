@@ -60,7 +60,18 @@ If: Box<ast::Expr> = {
     "if" <Spanned<Expr>> "then" <Expr> "else" <Expr> => Box::new(ast::Expr::If(<>)),
 }
 
-FuncSub = "fun" <Ident> "->" <Expr>;
+
+KeyPairPattern = {
+    Comment* <Spanned<Ident>> "=" <BoxedLetPattern>,
+}
+LetPattern: ast::LetPattern = {
+    <Ident> => ast::LetPattern::Var(<>),
+    "{" <SepList<KeyPairPattern, ";">> "}" => ast::LetPattern::Record(<>),
+}
+BoxedLetPattern: Box<ast::LetPattern> = <LetPattern> => Box::new(<>);
+
+
+FuncSub = "fun" <LetPattern> "->" <Expr>;
 FuncDef: Box<ast::Expr> = {
     Spanned<FuncSub> => Box::new(ast::Expr::FuncDef(<>)),
 }
@@ -93,9 +104,9 @@ Case: Box<ast::Expr> = {
     <Spanned<Tag>> <CaseExpr> => Box::new(ast::Expr::Case(<>)),
 }
 
-MatchPattern: ast::Pattern = {
-    Tag Ident => ast::Pattern::Case(<>),
-    Ident => ast::Pattern::Wildcard(<>),
+MatchPattern: ast::MatchPattern = {
+    Tag Ident => ast::MatchPattern::Case(<>),
+    Ident => ast::MatchPattern::Wildcard(<>),
 }
 MatchArm = {
     Comment* "|" <Spanned<MatchPattern>> "->" <CompareExpr>,

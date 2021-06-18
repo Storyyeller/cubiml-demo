@@ -227,6 +227,36 @@ fn parse_type_signature(engine: &mut TypeCheckerCore, tyexpr: &ast::TypeExpr) ->
     parse_type(engine, &mut bindings, tyexpr)
 }
 
+fn process_let_pattern(engine: &mut TypeCheckerCore, bindings: &mut Bindings, pat: &ast::LetPattern) -> Result<Use> {
+    use ast::LetPattern::*;
+
+    let (arg_type, arg_bound) = engine.var();
+    match pat {
+        Var(name) => {
+            bindings.insert(name.clone(), arg_type);
+        }
+        Record(pairs) => {
+            let mut field_names = HashMap::with_capacity(pairs.len());
+
+            for ((name, name_span), sub_pattern) in pairs {
+                if let Some(old_span) = field_names.insert(&*name, *name_span) {
+                    return Err(SyntaxError::new2(
+                        "SyntaxError: Repeated field pattern name",
+                        *name_span,
+                        "Note: Field was already bound here",
+                        old_span,
+                    ));
+                }
+
+                let field_bound = process_let_pattern(engine, bindings, &*sub_pattern)?;
+                let bound = engine.obj_use((name.clone(), field_bound), *name_span);
+                engine.flow(arg_type, bound)?;
+            }
+        }
+    };
+    Ok(arg_bound)
+}
+
 fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::Expr) -> Result<Value> {
     use ast::Expr::*;
 
@@ -289,11 +319,11 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(lhs_type, bound)?;
             Ok(field_type)
         }
-        FuncDef(((arg_name, body_expr), span)) => {
-            let (arg_type, arg_bound) = engine.var();
-            let body_type = bindings.in_child_scope(|bindings| {
-                bindings.insert(arg_name.clone(), arg_type);
-                check_expr(engine, bindings, body_expr)
+        FuncDef(((arg_pattern, body_expr), span)) => {
+            let (arg_bound, body_type) = bindings.in_child_scope(|bindings| {
+                let arg_bound = process_let_pattern(engine, bindings, arg_pattern)?;
+                let body_type = check_expr(engine, bindings, body_expr)?;
+                Ok((arg_bound, body_type))
             })?;
             Ok(engine.func(arg_bound, body_type, *span))
         }
@@ -387,7 +417,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                     ));
                 }
 
-                use ast::Pattern::*;
+                use ast::MatchPattern::*;
                 match pattern {
                     Case(tag, name) => {
                         if let Some(old_span) = case_names.insert(&*tag, *pattern_span) {

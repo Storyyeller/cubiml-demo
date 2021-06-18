@@ -95,11 +95,9 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let lhs = compile(ctx, lhs_expr);
             js::field(lhs, name.clone())
         }
-        ast::Expr::FuncDef(((arg_name, body_expr), _)) => {
+        ast::Expr::FuncDef(((arg_pattern, body_expr), _)) => {
             ctx.ml_scope(|ctx| {
-                let js_arg_name = format!("arg{}", ctx.scope_counter);
                 let new_scope_name = format!("s{}", ctx.scope_counter);
-                let js_arg = js::var(js_arg_name.clone());
                 let mut scope_expr = js::var(new_scope_name.clone());
 
                 ctx.scope_counter += 1;
@@ -108,7 +106,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 swap(&mut scope_expr, &mut ctx.scope_expr);
 
                 //////////////////////////////////////////////////////
-                ctx.set_binding(arg_name.to_string(), js_arg);
+                let js_pattern = compile_let_pattern(ctx, arg_pattern);
                 let body = compile(ctx, body_expr);
                 //////////////////////////////////////////////////////
 
@@ -116,7 +114,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 ctx.var_counter = var_counter;
                 swap(&mut scope_expr, &mut ctx.scope_expr);
 
-                js::func(js_arg_name, new_scope_name, body)
+                js::func(js_pattern, new_scope_name, body)
             })
         }
         ast::Expr::If((cond_expr, _), then_expr, else_expr) => {
@@ -175,7 +173,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
 
             let mut branches = Vec::new();
             for ((pattern, _), rhs_expr) in cases {
-                use ast::Pattern::*;
+                use ast::MatchPattern::*;
                 match pattern {
                     Case(tag, name) => {
                         ctx.ml_scope(|ctx| {
@@ -222,6 +220,20 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
         }
         ast::Expr::Typed(expr, _) => compile(ctx, expr),
         ast::Expr::Variable((name, _)) => ctx.bindings.get(name).unwrap().clone(),
+    }
+}
+
+fn compile_let_pattern(ctx: &mut ModuleBuilder, pat: &ast::LetPattern) -> js::Expr {
+    use ast::LetPattern::*;
+    match pat {
+        Var(ml_name) => {
+            let js_arg = js::var(ctx.new_var_name());
+            ctx.set_binding(ml_name.to_string(), js_arg.clone());
+            js_arg
+        }
+        Record(pairs) => {
+            js::obj(None, pairs.iter().map(|((name, _), pat)| (name.clone(), compile_let_pattern(ctx, &*pat))).collect())
+        }
     }
 }
 
