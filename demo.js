@@ -85,11 +85,8 @@ let fib =
         if n <= 1 then
             a
         else
-            let n = n - 1 in
-            let a2= a + b in
-            let b = a in
-            fib_sub {n; a=a2; b}
-        in
+            fib_sub {n=n-1; a=a+b; b=a}
+    in
     fun n -> fib_sub {n=n; a=1; b=1};
 
 (* matching on case types *)

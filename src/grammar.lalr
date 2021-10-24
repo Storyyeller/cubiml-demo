@@ -75,7 +75,7 @@ FuncDef: Box<ast::Expr> = {
     Spanned<FuncSub> => Box::new(ast::Expr::FuncDef(<>)),
 }
 Call: Box<ast::Expr> = {
-    Spanned<CallExpr> CaseExpr => {
+    Spanned<RefExpr> CallExpr => {
         let ((lhs, span), rhs) = (<>);
         Box::new(ast::Expr::Call(lhs, rhs, span))
     }
@@ -101,7 +101,7 @@ FieldAccess: Box<ast::Expr> = {
 }
 
 Case: Box<ast::Expr> = {
-    <Spanned<Tag>> <CaseExpr> => Box::new(ast::Expr::Case(<>)),
+    <Spanned<Tag>> <CallExpr> => Box::new(ast::Expr::Case(<>)),
 }
 
 MatchPattern: ast::MatchPattern = {
@@ -143,7 +143,7 @@ LetRec: Box<ast::Expr> = {
 
 
 NewRef: Box<ast::Expr> = {
-    Spanned<("ref" CaseExpr)> => {
+    Spanned<("ref" CallExpr)> => {
         let ((_, expr), span) = <>;
         Box::new(ast::Expr::NewRef(expr, span))
     }
@@ -280,14 +280,11 @@ RefExpr = {
     SimpleExpr,
     RefGet,
 }
-CaseExpr = {
+CallExpr = {
     RefExpr,
+    Call,
     Case,
     NewRef,
-}
-CallExpr = {
-    CaseExpr,
-    Call,
 }
 MultExpr = {
     CallExpr,

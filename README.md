@@ -7,7 +7,7 @@ You can try out cubiml online in your browser at https://storyyeller.github.io/c
 
 ## A quick tour of cubiml
 
-Cubiml syntax is mostly a subset of Ocaml syntax. If you're not familiar with Ocaml syntax, checkout the guide below.
+Cubiml syntax is mostly a subset of Ocaml syntax.
 
 #### Conditionals
 
@@ -30,6 +30,7 @@ would evaluate to `"Hello"`, while
     (fun x -> x.foo) {bar=false; foo="Bob"}
 
 would evaluate to `"Bob"`. 
+
 
 You can work around the one-argument limitation and simulate multiple function arguments by passing in a record. For example, instead of 
 
@@ -57,7 +58,7 @@ let sum = fun {a; b} -> a + b;
 sum {a=7; b=8}
 ```
 
-
+> :warning: **Function calls have different precedence than in Ocaml.** `a b c` is parsed as `a (b c)` rather than `(a b) c` as it would be in Ocaml.
 
 #### Let bindings
 
