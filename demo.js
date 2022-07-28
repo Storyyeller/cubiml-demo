@@ -85,7 +85,7 @@ let fib =
         if n <= 1 then
             a
         else
-            fib_sub {n=n-1; a=a+b; b=a}
+            fib_sub {n=n - 1; a=a + b; b=a}
     in
     fun n -> fib_sub {n=n; a=1; b=1};
 
