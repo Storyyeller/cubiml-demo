@@ -20,7 +20,10 @@ CommentRest = {
     "*)",
     "Sorry, comments can`t contain *s unless you`re closing them like *)",
 };
-Comment = r#"\(\*[^*]*"# CommentRest;
+Comment = {
+    <r#"\(\*[^*]*"#> CommentRest,
+    r#"//.*"#,
+};
 
 
 // make sure __proto__ is not considered a valid identifier
