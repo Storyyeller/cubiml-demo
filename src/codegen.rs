@@ -7,7 +7,7 @@ use crate::js;
 pub struct ModuleBuilder {
     scope_expr: js::Expr,
     scope_counter: u64,
-
+    param_counter: u64,
     var_counter: u64,                    // For choosing new var names
     bindings: HashMap<String, js::Expr>, // ML name -> JS exor for current scope
     changes: Vec<(String, Option<js::Expr>)>,
@@ -17,6 +17,7 @@ impl ModuleBuilder {
         Self {
             scope_expr: js::var("$".to_string()),
             scope_counter: 0,
+            param_counter: 0,
             var_counter: 0,
             bindings: HashMap::new(),
             changes: Vec::new(),
@@ -40,6 +41,20 @@ impl ModuleBuilder {
         res
     }
 
+    fn fn_scope<T>(&mut self, cb: impl FnOnce(&mut Self) -> T) -> T {
+        let old_var_counter = self.var_counter;
+        let old_param_counter = self.param_counter;
+        let old_scope_counter = self.scope_counter;
+        self.var_counter = 0;
+
+        let res = self.ml_scope(cb);
+
+        self.var_counter = old_var_counter;
+        self.param_counter = old_param_counter;
+        self.scope_counter = old_scope_counter;
+        res
+    }
+
     fn set_binding(&mut self, k: String, v: js::Expr) {
         let old = self.bindings.insert(k.clone(), v);
         self.changes.push((k, old));
@@ -56,6 +71,18 @@ impl ModuleBuilder {
         let expr = js::field(self.scope_expr.clone(), js_name);
         self.set_binding(ml_name.to_string(), expr.clone());
         expr
+    }
+
+    fn new_scope_name(&mut self) -> String {
+        let js_name = format!("s{}", self.scope_counter);
+        self.scope_counter += 1;
+        js_name
+    }
+
+    fn new_param_name(&mut self) -> String {
+        let js_name = format!("p{}", self.param_counter);
+        self.param_counter += 1;
+        js_name
     }
 }
 
@@ -96,13 +123,9 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             js::field(lhs, name.clone())
         }
         ast::Expr::FuncDef(((arg_pattern, body_expr), _)) => {
-            ctx.ml_scope(|ctx| {
-                let new_scope_name = format!("s{}", ctx.scope_counter);
+            ctx.fn_scope(|ctx| {
+                let new_scope_name = ctx.new_scope_name();
                 let mut scope_expr = js::var(new_scope_name.clone());
-
-                ctx.scope_counter += 1;
-                let var_counter = ctx.var_counter;
-                ctx.var_counter = 0;
                 swap(&mut scope_expr, &mut ctx.scope_expr);
 
                 //////////////////////////////////////////////////////
@@ -110,10 +133,7 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
                 let body = compile(ctx, body_expr);
                 //////////////////////////////////////////////////////
 
-                ctx.scope_counter -= 1;
-                ctx.var_counter = var_counter;
                 swap(&mut scope_expr, &mut ctx.scope_expr);
-
                 js::func(js_pattern, new_scope_name, body)
             })
         }
@@ -227,7 +247,7 @@ fn compile_let_pattern(ctx: &mut ModuleBuilder, pat: &ast::LetPattern) -> js::Ex
     use ast::LetPattern::*;
     match pat {
         Var(ml_name) => {
-            let js_arg = js::var(ctx.new_var_name());
+            let js_arg = js::var(ctx.new_param_name());
             ctx.set_binding(ml_name.to_string(), js_arg.clone());
             js_arg
         }
