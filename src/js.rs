@@ -65,7 +65,7 @@ pub fn func(arg: Expr, scope: String, body: Expr) -> Expr {
 
 pub fn obj(spread: Option<Expr>, fields: Vec<(String, Expr)>) -> Expr {
     let mut prop_defs = Vec::new();
-    for v in spread {
+    if let Some(v) = spread {
         prop_defs.push(PropertyDefinition::Spread(v.0.into()));
     }
     for (name, v) in fields {
