@@ -87,7 +87,7 @@ let fib =
         else
             fib_sub {n=n - 1; a=a + b; b=a}
     in
-    fun n -> fib_sub {n=n; a=1; b=1};
+    fun n -> fib_sub {n; a=1; b=1};
 
 (* matching on case types *)
 let area = fun x ->
