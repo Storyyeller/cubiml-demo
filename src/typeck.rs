@@ -59,9 +59,29 @@ impl Bindings {
     }
 }
 
+struct TypeVarBindings {
+    level: u32,
+    // Only valid if u32 <= self.level
+    m: HashMap<String, ((Value, Use), u32, Span)>,
+}
+impl TypeVarBindings {
+    fn new() -> Self {
+        Self {
+            level: 0,
+            m: HashMap::new(),
+        }
+    }
+
+    fn insert(&mut self, name: String, v: (Value, Use), span: Span) -> Option<Span> {
+        self.m.insert(name, (v, self.level + 1, span)).map(|t| t.2)
+    }
+}
+
+
+
 fn parse_type(
     engine: &mut TypeCheckerCore,
-    bindings: &mut HashMap<String, ((Value, Use), Span)>,
+    bindings: &mut TypeVarBindings,
     tyexpr: &ast::TypeExpr,
 ) -> Result<(Value, Use)> {
     use ast::TypeExpr::*;
@@ -70,8 +90,8 @@ fn parse_type(
             let (utype_value, utype) = engine.var();
             let (vtype, vtype_bound) = engine.var();
 
-            let old = bindings.insert(name.to_string(), ((utype_value, vtype_bound), *span));
-            if let Some((_, old_span)) = old {
+            let old = bindings.insert(name.to_string(), (vtype, utype), *span);
+            if let Some(old_span) = old {
                 return Err(SyntaxError::new2(
                     format!("SyntaxError: Redefinition of type variable '{}", name),
                     *span,
@@ -83,6 +103,8 @@ fn parse_type(
             let lhs_type = parse_type(engine, bindings, lhs)?;
             engine.flow(lhs_type.0, vtype_bound)?;
             engine.flow(utype_value, lhs_type.1)?;
+            // Make alias permanent by setting level to 0 now that definition is complete
+            bindings.m.get_mut(name).unwrap().1 = 0;
             Ok((vtype, utype))
         }
         Case(ext, cases, span) => {
@@ -98,6 +120,8 @@ fn parse_type(
                 None
             };
 
+            // Must do this *after* parsing wildcard as wildcards are unguarded
+            bindings.level += 1;
             let mut utype_case_arms = Vec::new();
             for ((tag, tag_span), wrapped_expr) in cases {
                 let wrapped_type = parse_type(engine, bindings, wrapped_expr)?;
@@ -106,13 +130,16 @@ fn parse_type(
                 engine.flow(case_value, vtype_bound)?;
                 utype_case_arms.push((tag.clone(), (wrapped_type.1, dummy)));
             }
+            bindings.level -= 1;
 
             let utype = engine.case_use(utype_case_arms, utype_wildcard, *span);
             Ok((vtype, utype))
         }
         Func(((lhs, rhs), span)) => {
+            bindings.level += 1;
             let lhs_type = parse_type(engine, bindings, lhs)?;
             let rhs_type = parse_type(engine, bindings, rhs)?;
+            bindings.level -= 1;
 
             let utype = engine.func_use(lhs_type.0, rhs_type.1, *span);
             let vtype = engine.func(lhs_type.1, rhs_type.0, *span);
@@ -177,8 +204,10 @@ fn parse_type(
                 None
             };
 
-            let mut vtype_fields = Vec::new();
 
+            // Must do this *after* parsing wildcard as wildcards are unguarded
+            bindings.level += 1;
+            let mut vtype_fields = Vec::new();
             for ((name, name_span), wrapped_expr) in fields {
                 let wrapped_type = parse_type(engine, bindings, wrapped_expr)?;
 
@@ -186,13 +215,16 @@ fn parse_type(
                 engine.flow(utype_value, obj_use)?;
                 vtype_fields.push((name.clone(), wrapped_type.0));
             }
+            bindings.level -= 1;
 
             let vtype = engine.obj(vtype_fields, vtype_wildcard, *span);
             Ok((vtype, utype))
         }
         Ref(lhs, (rw, span)) => {
             use ast::Readability::*;
+            bindings.level += 1;
             let lhs_type = parse_type(engine, bindings, lhs)?;
+            bindings.level -= 1;
 
             let write = if *rw == ReadOnly {
                 (None, None)
@@ -210,8 +242,14 @@ fn parse_type(
             Ok((vtype, utype))
         }
         TypeVar((name, span)) => {
-            if let Some((res, _)) = bindings.get(name.as_str()) {
-                Ok(*res)
+            if let Some((res, lvl, _)) = bindings.m.get(name.as_str()).copied() {
+                if lvl <= bindings.level {
+                    Ok(res)
+                } else {
+                    Err(SyntaxError::new1(
+                    format!("SyntaxError: Unguarded type variable {}. Recursive type variables must be nested within a case, record field, function, or ref", name),
+                    *span))
+                }
             } else {
                 Err(SyntaxError::new1(
                     format!("SyntaxError: Undefined type variable {}", name),
@@ -223,7 +261,7 @@ fn parse_type(
 }
 
 fn parse_type_signature(engine: &mut TypeCheckerCore, tyexpr: &ast::TypeExpr) -> Result<(Value, Use)> {
-    let mut bindings = HashMap::new();
+    let mut bindings = TypeVarBindings::new();
     parse_type(engine, &mut bindings, tyexpr)
 }
 
