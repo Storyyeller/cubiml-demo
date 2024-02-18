@@ -251,9 +251,13 @@ fn compile_let_pattern(ctx: &mut ModuleBuilder, pat: &ast::LetPattern) -> js::Ex
             ctx.set_binding(ml_name.to_string(), js_arg.clone());
             js_arg
         }
-        Record(pairs) => {
-            js::obj(None, pairs.iter().map(|((name, _), pat)| (name.clone(), compile_let_pattern(ctx, &*pat))).collect())
-        }
+        Record(pairs) => js::obj(
+            None,
+            pairs
+                .iter()
+                .map(|((name, _), pat)| (name.clone(), compile_let_pattern(ctx, &*pat)))
+                .collect(),
+        ),
     }
 }
 

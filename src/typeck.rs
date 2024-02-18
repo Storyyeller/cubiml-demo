@@ -77,13 +77,7 @@ impl TypeVarBindings {
     }
 }
 
-
-
-fn parse_type(
-    engine: &mut TypeCheckerCore,
-    bindings: &mut TypeVarBindings,
-    tyexpr: &ast::TypeExpr,
-) -> Result<(Value, Use)> {
+fn parse_type(engine: &mut TypeCheckerCore, bindings: &mut TypeVarBindings, tyexpr: &ast::TypeExpr) -> Result<(Value, Use)> {
     use ast::TypeExpr::*;
     match tyexpr {
         Alias(lhs, (name, span)) => {
@@ -203,7 +197,6 @@ fn parse_type(
             } else {
                 None
             };
-
 
             // Must do this *after* parsing wildcard as wildcards are unguarded
             bindings.level += 1;
