@@ -29,7 +29,7 @@ fn convert_parse_error<T: Display>(mut sm: SpanMaker, e: ParseError<usize, T, &'
         ParseError::InvalidToken { location } => {
             SpannedError::new1("SyntaxError: Invalid token", sm.span(location, location))
         }
-        ParseError::UnrecognizedEOF { location, expected } => SpannedError::new1(
+        ParseError::UnrecognizedEof { location, expected } => SpannedError::new1(
             format!(
                 "SyntaxError: Unexpected end of input.\nNote: expected tokens: [{}]\nParse error occurred here:",
                 expected.join(", ")
