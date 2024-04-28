@@ -31,12 +31,8 @@ FloatLiteral: String =
 StringLiteral: String =
     <r#""[^\\"\n\r]*(?:\\[tn'"\\][^\\"\n\r]*)*""#> => String::from(<>);
 
-CommentRest = {
-    "*)",
-    "Sorry, comments can`t contain *s unless you`re closing them like *)",
-};
 Comment = {
-    <r#"\(\*[^*]*"#> CommentRest,
+    <r#"\(\*[^*]*\*+(?:[^\)*][^*]*\*+)*\)"#>,
     r#"//.*"#,
 };
 
