@@ -24,7 +24,7 @@ use self::grammar::ScriptParser;
 use self::spans::{SpanMaker, SpanManager, SpannedError};
 use self::typeck::TypeckState;
 
-fn convert_parse_error<T: Display>(mut sm: SpanMaker, e: ParseError<usize, T, &'static str>) -> SpannedError {
+fn convert_parse_error<T: Display>(mut sm: SpanMaker, e: ParseError<usize, T, (&'static str, spans::Span)>) -> SpannedError {
     match e {
         ParseError::InvalidToken { location } => {
             SpannedError::new1("SyntaxError: Invalid token", sm.span(location, location))
@@ -47,7 +47,7 @@ fn convert_parse_error<T: Display>(mut sm: SpanMaker, e: ParseError<usize, T, &'
         ParseError::ExtraToken { token } => {
             SpannedError::new1("SyntaxError: Unexpected extra token", sm.span(token.0, token.2))
         }
-        ParseError::User { error: msg } => unreachable!(),
+        ParseError::User { error: (msg, span) } => SpannedError::new1(msg, span),
     }
 }
 

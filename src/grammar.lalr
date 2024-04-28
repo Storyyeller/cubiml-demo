@@ -1,16 +1,30 @@
+use lalrpop_util::ParseError;
+
 use super::ast; // super instead of self because lalrpop wraps this in an internal module
 use super::spans;
 
 
 grammar(ctx: &mut spans::SpanMaker<'input>);
 
+extern {
+    type Error = (&'static str, spans::Span);
+}
+
 // Tokens ////////////////////////////////////////////////////////////
 Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z0-9]\w*"> => String::from(<>);
 
 IntLiteral: String = {
-    <r"-?(?:0|[1-9][0-9]*)"> => String::from(<>),
-    r"0\d" "Numbers can`t have leading zeros" => "0".to_string(),
+    <l: @L> <s: r"-?(?:[0-9]+)"> <r: @R> =>? {
+        let s2 = s.trim_start_matches('-');
+        if s2 != "0" && s2.starts_with("0") {
+            Err(ParseError::User {
+                error: ("SyntaxError: Numbers can't contain leading 0s", ctx.span(l, r))
+            })
+        } else {
+            Ok(String::from(s))
+        }
+    },
 };
 FloatLiteral: String =
     <r"-?(?:0|[1-9][0-9]*)\.[0-9]*(?:[eE]-?[0-9]+)?"> => String::from(<>);
