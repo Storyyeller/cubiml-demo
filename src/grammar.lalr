@@ -11,6 +11,15 @@ extern {
 }
 
 // Tokens ////////////////////////////////////////////////////////////
+match {
+    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r#"\(\*[^*]*\*+(?:[^\)*][^*]*\*+)*\)"# => { },  // Skip `(* comments *)`
+} else {
+    _
+}
+
+
 Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z0-9]\w*"> => String::from(<>);
 
@@ -30,11 +39,6 @@ FloatLiteral: String =
     <r"-?(?:0|[1-9][0-9]*)\.[0-9]*(?:[eE]-?[0-9]+)?"> => String::from(<>);
 StringLiteral: String =
     <r#""[^\\"\n\r]*(?:\\[tn'"\\][^\\"\n\r]*)*""#> => String::from(<>);
-
-Comment = {
-    <r#"\(\*[^*]*\*+(?:[^\)*][^*]*\*+)*\)"#>,
-    r#"//.*"#,
-};
 
 
 // make sure __proto__ is not considered a valid identifier
@@ -139,8 +143,8 @@ RecordExtension = {
     <Box<CallExpr>> "with"
 }
 KeyPairExpr: (spans::Spanned<String>, Box<ast::Expr>) = {
-    Comment* <Spanned<Ident>> "=" <Box<Expr>>,
-    Comment* <name: Spanned<Ident>> => (name.clone(), Box::new(ast::Expr::Variable(name))),
+    <Spanned<Ident>> "=" <Box<Expr>>,
+    <name: Spanned<Ident>> => (name.clone(), Box::new(ast::Expr::Variable(name))),
 }
 RecordSub = "{" <RecordExtension?> <SepListOpt<KeyPairExpr, ";">> "}";
 Record: ast::Expr = {
@@ -270,8 +274,8 @@ CompareExpr = {
 
 // Top level expressions /////////////////////////////////////////////
 KeyPairPattern: (spans::Spanned<String>, Box<ast::LetPattern>) = {
-    Comment* <name: Spanned<Ident>> "=" <pat: LetPattern> => (name, Box::new(pat)),
-    Comment* <name: Spanned<Ident>> => (name.clone(), Box::new(ast::LetPattern::Var(name.0))),
+    <name: Spanned<Ident>> "=" <pat: LetPattern> => (name, Box::new(pat)),
+    <name: Spanned<Ident>> => (name.clone(), Box::new(ast::LetPattern::Var(name.0))),
 }
 LetPattern: ast::LetPattern = {
     <Ident> => ast::LetPattern::Var(<>),
@@ -300,7 +304,7 @@ Let: ast::Expr = {
 
 
 LetRecDef = {
-    <Ident> "=" Comment* <Box<FuncDef>>,
+    <Ident> "=" <Box<FuncDef>>,
 }
 LetRecLHS = {
     "let" "rec" <SepList<LetRecDef, "and">>,
@@ -315,7 +319,7 @@ MatchPattern: ast::MatchPattern = {
     Ident => ast::MatchPattern::Wildcard(<>),
 }
 MatchArm = {
-    Comment* "|" <Spanned<MatchPattern>> "->" <Box<CompareExpr>>,
+    "|" <Spanned<MatchPattern>> "->" <Box<CompareExpr>>,
 }
 MatchSub = "match" <Spanned<Box<Expr>>> "with" <MatchArm+>;
 Match: ast::Expr = {
@@ -332,7 +336,7 @@ RefSet: ast::Expr = {
 
 
 
-TopLevelExpr = {
+Expr = {
     CompareExpr,
     FuncDef,
     If,
@@ -341,10 +345,6 @@ TopLevelExpr = {
     Match,
     RefSet,
 }
-Expr = {
-    TopLevelExpr,
-    Comment <Expr>,
-}
 //////////////////////////////////////////////////////////////////////
 
 
@@ -352,9 +352,7 @@ Expr = {
 TopLevelItem: ast::TopLevel = {
     <LetLHS> => ast::TopLevel::LetDef(<>),
     <LetRecLHS> => ast::TopLevel::LetRecDef(<>),
-    <TopLevelExpr> => ast::TopLevel::Expr(<>),
-
-    Comment <TopLevelItem>,
+    <Expr> => ast::TopLevel::Expr(<>),
 }
 
 pub Script = {

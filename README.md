@@ -278,7 +278,7 @@ The value you are copying fields from does not have to be a statically known val
 
 #### Comments
 
-Comments use `(* *)`. Comments cannot be nested. You can put comments before match arms, before record fields, and before expressions wherever a let declaration or function definition would be allowed. To put them in front of expressions with higher precedence, surround it in parenthesis first.
+Comments use `(* *)` and cannot be nested. 
 
 ```ocaml
 (* define x = 4 *)
@@ -286,7 +286,6 @@ let x = 4;
 
 let y = x + (
     (* 2 is an int *) 
-    (* we needed the ()s around 2 here since + has higher precdence *)
     2
 );
 
