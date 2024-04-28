@@ -60,6 +60,21 @@ SepListOpt<T, Sep>: Vec<T> = {
     SepList<T, Sep>,
     => Vec::new(),
 };
+// One or more items, allowing a trailing separator
+SepListTrail<T, Sep>: Vec<T> = {
+    <v:(<T> Sep)+> <e:T?> => {
+        let mut v = v;
+        if let Some(e) = e {
+            v.push(e);
+        }
+        v
+    }
+};
+
+
+
+
+
 
 Spanned<T>: spans::Spanned<T> = {
     <l: @L> <val: T> <r: @R> => (val, ctx.span(l, r))
@@ -356,5 +371,5 @@ TopLevelItem: ast::TopLevel = {
 }
 
 pub Script = {
-   <SepList<TopLevelItem, ";">>
+   <SepListTrail<TopLevelItem, ";">>
 }
