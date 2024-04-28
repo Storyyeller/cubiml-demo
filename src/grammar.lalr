@@ -4,6 +4,7 @@ use super::spans;
 
 grammar(ctx: &mut spans::SpanMaker<'input>);
 
+// Tokens ////////////////////////////////////////////////////////////
 Ident: String = <r"[a-z_]\w*"> => String::from(<>);
 Tag: String = <r"`[A-Z0-9]\w*"> => String::from(<>);
 
@@ -49,12 +50,71 @@ SepListOpt<T, Sep>: Vec<T> = {
 Spanned<T>: spans::Spanned<T> = {
     <l: @L> <val: T> <r: @R> => (val, ctx.span(l, r))
 };
-//////////////////////////////////////////////////////////////////////
+
+// Types /////////////////////////////////////////////////////////////
+RecordTypeExtension = <Box<Type>> "with";
+KeyPairType = {
+    <Spanned<Ident>> ":" <Box<Type>>,
+}
+RecordTypeSub = "{" <RecordTypeExtension?> <SepList<KeyPairType, ";">> "}";
+RecordType: ast::TypeExpr = {
+    Spanned<RecordTypeSub> => {
+        let ((ext, fields), span) = <>;
+        ast::TypeExpr::Record(ext, fields, span)
+    }
+}
+
+CaseTypeExtension = <Box<Type>> "|";
+VariantType = <Spanned<Tag>> "of" <Box<NoFunType>>;
+CaseTypeSub = "[" <CaseTypeExtension?> <SepList<VariantType, "|">> "]";
+CaseType: ast::TypeExpr = {
+    Spanned<CaseTypeSub> => {
+        let ((ext, cases), span) = <>;
+        ast::TypeExpr::Case(ext, cases, span)
+    }
+}
+
+RefReadability: ast::Readability = {
+    "readonly" "ref" => ast::Readability::ReadOnly,
+    "writeonly" "ref" => ast::Readability::WriteOnly,
+    "ref" => ast::Readability::ReadWrite,
+}
+RefType: ast::TypeExpr = {
+    Box<NoFunType> Spanned<RefReadability> => ast::TypeExpr::Ref(<>),
+}
+
+QMark: spans::Span = Spanned<"?"> => <>.1;
+NullableType: ast::TypeExpr = {
+    Box<NoFunType> QMark => ast::TypeExpr::Nullable(<>),
+}
+
+TypeVar = "'" <Ident>;
+
+NoFunType: ast::TypeExpr = {
+    Spanned<Ident> => ast::TypeExpr::Ident(<>),
+    <Box<NoFunType>> "as" <Spanned<TypeVar>> => ast::TypeExpr::Alias(<>),
+    Spanned<TypeVar> => ast::TypeExpr::TypeVar(<>),
+
+    RecordType,
+    CaseType,
+    RefType,
+    NullableType,
+    "(" <Type> ")",
+}
+FuncTypeSub = <Box<NoFunType>> "->" <Box<Type>>;
+FuncType: ast::TypeExpr = {
+    Spanned<FuncTypeSub> => ast::TypeExpr::Func(<>),
+}
+
+Type = {
+    NoFunType,
+    FuncType,
+}
 
 
 
 
-
+// Exprs /////////////////////////////////////////////////////////////
 VarOrLiteral: ast::Expr = {
     Spanned<Ident> =>
         match <>.0.as_str() {
@@ -221,61 +281,6 @@ CmpOp: ast::Expr = {
 
 
 
-RecordTypeExtension = <Box<Type>> "with";
-KeyPairType = {
-    <Spanned<Ident>> ":" <Box<Type>>,
-}
-RecordTypeSub = "{" <RecordTypeExtension?> <SepList<KeyPairType, ";">> "}";
-RecordType: ast::TypeExpr = {
-    Spanned<RecordTypeSub> => {
-        let ((ext, fields), span) = <>;
-        ast::TypeExpr::Record(ext, fields, span)
-    }
-}
-
-CaseTypeExtension = <Box<Type>> "|";
-VariantType = <Spanned<Tag>> "of" <Box<NoFunType>>;
-CaseTypeSub = "[" <CaseTypeExtension?> <SepList<VariantType, "|">> "]";
-CaseType: ast::TypeExpr = {
-    Spanned<CaseTypeSub> => {
-        let ((ext, cases), span) = <>;
-        ast::TypeExpr::Case(ext, cases, span)
-    }
-}
-FuncTypeSub = <Box<NoFunType>> "->" <Box<Type>>;
-FuncType: ast::TypeExpr = {
-    Spanned<FuncTypeSub> => ast::TypeExpr::Func(<>),
-}
-RefReadability: ast::Readability = {
-    "readonly" "ref" => ast::Readability::ReadOnly,
-    "writeonly" "ref" => ast::Readability::WriteOnly,
-    "ref" => ast::Readability::ReadWrite,
-}
-RefType: ast::TypeExpr = {
-    Box<NoFunType> Spanned<RefReadability> => ast::TypeExpr::Ref(<>),
-}
-QMark: spans::Span = Spanned<"?"> => <>.1;
-NullableType: ast::TypeExpr = {
-    Box<NoFunType> QMark => ast::TypeExpr::Nullable(<>),
-}
-
-TypeVar = "'" <Ident>;
-
-NoFunType: ast::TypeExpr = {
-    Spanned<Ident> => ast::TypeExpr::Ident(<>),
-    <Box<NoFunType>> "as" <Spanned<TypeVar>> => ast::TypeExpr::Alias(<>),
-    Spanned<TypeVar> => ast::TypeExpr::TypeVar(<>),
-
-    RecordType,
-    CaseType,
-    RefType,
-    NullableType,
-    "(" <Type> ")",
-}
-Type = {
-    NoFunType,
-    FuncType,
-}
 
 
 
