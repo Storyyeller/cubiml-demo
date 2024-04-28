@@ -114,46 +114,16 @@ Type = {
 
 
 
-// Exprs /////////////////////////////////////////////////////////////
-VarOrLiteral: ast::Expr = {
-    Spanned<Ident> =>
-        match <>.0.as_str() {
-            "false" | "true" => ast::Expr::Literal(ast::Literal::Bool, <>),
-            "null" => ast::Expr::Literal(ast::Literal::Null, <>),
-            _ => ast::Expr::Variable(<>)
-        }
-    ,
-
-    Spanned<FloatLiteral> => ast::Expr::Literal(ast::Literal::Float, <>),
-    Spanned<IntLiteral> => ast::Expr::Literal(ast::Literal::Int, <>),
-    Spanned<StringLiteral> => ast::Expr::Literal(ast::Literal::Str, <>),
-}
-
-If: ast::Expr = {
-    "if" <Spanned<Box<Expr>>> "then" <Box<Expr>> "else" <Box<Expr>> => ast::Expr::If(<>),
-}
+//////////////////////////////////////////////////////////////////////
+// Expressions ///////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
 
 
-KeyPairPattern: (spans::Spanned<String>, Box<ast::LetPattern>) = {
-    Comment* <name: Spanned<Ident>> "=" <pat: LetPattern> => (name, Box::new(pat)),
-    Comment* <name: Spanned<Ident>> => (name.clone(), Box::new(ast::LetPattern::Var(name.0))),
-}
-LetPattern: ast::LetPattern = {
-    <Ident> => ast::LetPattern::Var(<>),
-    "{" <SepList<KeyPairPattern, ";">> "}" => ast::LetPattern::Record(<>),
-}
 
-FuncSub = "fun" <LetPattern> "->" <Box<Expr>>;
-FuncDef: ast::Expr = {
-    Spanned<FuncSub> => ast::Expr::FuncDef(<>),
+// SimpleExpr ////////////////////////////////////////////////////////
+FieldAccess: ast::Expr = {
+    <lhs: Box<SimpleExpr>> <rhs: Spanned<("." Ident)>> => ast::Expr::FieldAccess(lhs, (rhs.0).1, rhs.1),
 }
-Call: ast::Expr = {
-    Spanned<Box<RefExpr>> Box<CallExpr> => {
-        let ((lhs, span), rhs) = (<>);
-        ast::Expr::Call(lhs, rhs, span)
-    }
-}
-
 
 RecordExtension = {
     <Box<CallExpr>> "with"
@@ -169,66 +139,67 @@ Record: ast::Expr = {
         ast::Expr::Record(proto, fields, span)
     }
 }
-FieldAccess: ast::Expr = {
-    <lhs: Box<SimpleExpr>> <rhs: Spanned<("." Ident)>> => ast::Expr::FieldAccess(lhs, (rhs.0).1, rhs.1),
+
+VarOrLiteral: ast::Expr = {
+    Spanned<Ident> =>
+        match <>.0.as_str() {
+            "false" | "true" => ast::Expr::Literal(ast::Literal::Bool, <>),
+            "null" => ast::Expr::Literal(ast::Literal::Null, <>),
+            _ => ast::Expr::Variable(<>)
+        }
+    ,
+
+    Spanned<FloatLiteral> => ast::Expr::Literal(ast::Literal::Float, <>),
+    Spanned<IntLiteral> => ast::Expr::Literal(ast::Literal::Int, <>),
+    Spanned<StringLiteral> => ast::Expr::Literal(ast::Literal::Str, <>),
 }
 
+SimpleExpr = {
+    FieldAccess,
+    Record,
+    VarOrLiteral,
+    "(" <Expr> ")",
+    "(" <Box<Expr>> ":" <Type> ")" => ast::Expr::Typed(<>),
+}
+//////////////////////////////////////////////////////////////////////
+
+
+// RefExpr ///////////////////////////////////////////////////////////
+RefGet: ast::Expr = {
+    "!" <Spanned<Box<RefExpr>>> => ast::Expr::RefGet(<>)
+}
+RefExpr = {
+    SimpleExpr,
+    RefGet,
+}
+//////////////////////////////////////////////////////////////////////
+
+// CallExpr //////////////////////////////////////////////////////////
+Call: ast::Expr = {
+    Spanned<Box<RefExpr>> Box<CallExpr> => {
+        let ((lhs, span), rhs) = (<>);
+        ast::Expr::Call(lhs, rhs, span)
+    }
+}
 Case: ast::Expr = {
     <Spanned<Tag>> <Box<CallExpr>> => ast::Expr::Case(<>),
 }
-
-MatchPattern: ast::MatchPattern = {
-    Tag Ident => ast::MatchPattern::Case(<>),
-    Ident => ast::MatchPattern::Wildcard(<>),
-}
-MatchArm = {
-    Comment* "|" <Spanned<MatchPattern>> "->" <Box<CompareExpr>>,
-}
-MatchSub = "match" <Spanned<Box<Expr>>> "with" <MatchArm+>;
-Match: ast::Expr = {
-    MatchSub => {
-        let ((param, span), arms) = <>;
-        ast::Expr::Match(param, arms, span)
-    }
-}
-
-
-LetLHS = {
-    "let" <Ident> "=" <Box<Expr>>,
-}
-LetRHS = {
-    "in" <Box<Expr>>,
-}
-Let: ast::Expr = {
-    <LetLHS> <LetRHS> => ast::Expr::Let(<>),
-}
-
-
-LetRecDef = {
-    <Ident> "=" Comment* <Box<FuncDef>>,
-}
-LetRecLHS = {
-    "let" "rec" <SepList<LetRecDef, "and">>,
-}
-LetRec: ast::Expr = {
-     <LetRecLHS> <LetRHS> => ast::Expr::LetRec(<>),
-}
-
-
 NewRef: ast::Expr = {
     Spanned<("ref" Box<CallExpr>)> => {
         let ((_, expr), span) = <>;
         ast::Expr::NewRef(expr, span)
     }
 }
-RefGet: ast::Expr = {
-    "!" <Spanned<Box<RefExpr>>> => ast::Expr::RefGet(<>)
-}
-RefSet: ast::Expr = {
-    <Spanned<Box<CallExpr>>> ":=" <Box<Expr>> => ast::Expr::RefSet(<>)
-}
 
+CallExpr = {
+    RefExpr,
+    Call,
+    Case,
+    NewRef,
+}
+//////////////////////////////////////////////////////////////////////
 
+// Binary expressions/////////////////////////////////////////////////
 MultOpSub: (ast::OpType, ast::Op) = {
     "*" => (ast::OpType::IntOp, ast::Op::Mult),
     "/" => (ast::OpType::IntOp, ast::Op::Div),
@@ -273,37 +244,6 @@ CmpOp: ast::Expr = {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-SimpleExpr = {
-    FieldAccess,
-    Record,
-    VarOrLiteral,
-    "(" <Expr> ")",
-    "(" <Box<Expr>> ":" <Type> ")" => ast::Expr::Typed(<>),
-}
-RefExpr = {
-    SimpleExpr,
-    RefGet,
-}
-CallExpr = {
-    RefExpr,
-    Call,
-    Case,
-    NewRef,
-}
 MultExpr = {
     CallExpr,
     MultOp,
@@ -316,6 +256,72 @@ CompareExpr = {
     AddExpr,
     CmpOp,
 }
+//////////////////////////////////////////////////////////////////////
+
+// Top level expressions /////////////////////////////////////////////
+KeyPairPattern: (spans::Spanned<String>, Box<ast::LetPattern>) = {
+    Comment* <name: Spanned<Ident>> "=" <pat: LetPattern> => (name, Box::new(pat)),
+    Comment* <name: Spanned<Ident>> => (name.clone(), Box::new(ast::LetPattern::Var(name.0))),
+}
+LetPattern: ast::LetPattern = {
+    <Ident> => ast::LetPattern::Var(<>),
+    "{" <SepList<KeyPairPattern, ";">> "}" => ast::LetPattern::Record(<>),
+}
+FuncSub = "fun" <LetPattern> "->" <Box<Expr>>;
+FuncDef: ast::Expr = {
+    Spanned<FuncSub> => ast::Expr::FuncDef(<>),
+}
+
+
+If: ast::Expr = {
+    "if" <Spanned<Box<Expr>>> "then" <Box<Expr>> "else" <Box<Expr>> => ast::Expr::If(<>),
+}
+
+
+LetLHS = {
+    "let" <Ident> "=" <Box<Expr>>,
+}
+LetRHS = {
+    "in" <Box<Expr>>,
+}
+Let: ast::Expr = {
+    <LetLHS> <LetRHS> => ast::Expr::Let(<>),
+}
+
+
+LetRecDef = {
+    <Ident> "=" Comment* <Box<FuncDef>>,
+}
+LetRecLHS = {
+    "let" "rec" <SepList<LetRecDef, "and">>,
+}
+LetRec: ast::Expr = {
+     <LetRecLHS> <LetRHS> => ast::Expr::LetRec(<>),
+}
+
+
+MatchPattern: ast::MatchPattern = {
+    Tag Ident => ast::MatchPattern::Case(<>),
+    Ident => ast::MatchPattern::Wildcard(<>),
+}
+MatchArm = {
+    Comment* "|" <Spanned<MatchPattern>> "->" <Box<CompareExpr>>,
+}
+MatchSub = "match" <Spanned<Box<Expr>>> "with" <MatchArm+>;
+Match: ast::Expr = {
+    MatchSub => {
+        let ((param, span), arms) = <>;
+        ast::Expr::Match(param, arms, span)
+    }
+}
+
+
+RefSet: ast::Expr = {
+    <Spanned<Box<CallExpr>>> ":=" <Box<Expr>> => ast::Expr::RefSet(<>)
+}
+
+
+
 TopLevelExpr = {
     CompareExpr,
     FuncDef,
@@ -329,6 +335,9 @@ Expr = {
     TopLevelExpr,
     Comment <Expr>,
 }
+//////////////////////////////////////////////////////////////////////
+
+
 
 TopLevelItem: ast::TopLevel = {
     <LetLHS> => ast::TopLevel::LetDef(<>),
