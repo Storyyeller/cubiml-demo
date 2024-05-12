@@ -238,6 +238,11 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let rhs = compile(ctx, rhs_expr);
             js::assign(js::field(lhs, "$p".to_string()), rhs)
         }
+        ast::Expr::Seq(lhs_expr, rhs_expr) => {
+            let lhs = compile(ctx, lhs_expr);
+            let rhs = compile(ctx, rhs_expr);
+            js::comma_pair(lhs, rhs)
+        }
         ast::Expr::Typed(expr, _) => compile(ctx, expr),
         ast::Expr::Variable((name, _)) => ctx.bindings.get(name).unwrap().clone(),
     }

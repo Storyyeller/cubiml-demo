@@ -222,9 +222,9 @@ NewRef: ast::Expr = {
 
 CallExpr = {
     RefExpr,
-    Call,
-    Case,
-    NewRef,
+    //Call,
+    //Case,
+    //NewRef,
 }
 //////////////////////////////////////////////////////////////////////
 
@@ -275,15 +275,15 @@ CmpOp: ast::Expr = {
 
 MultExpr = {
     CallExpr,
-    MultOp,
+    //MultOp,
 }
 AddExpr = {
     MultExpr,
-    AddOp,
+    //AddOp,
 }
 CompareExpr = {
     AddExpr,
-    CmpOp,
+    //CmpOp,
 }
 //////////////////////////////////////////////////////////////////////
 
@@ -296,22 +296,22 @@ LetPattern: ast::LetPattern = {
     <Ident> => ast::LetPattern::Var(<>),
     "{" <SepList<KeyPairPattern, ";">> "}" => ast::LetPattern::Record(<>),
 }
-FuncSub = "fun" <LetPattern> "->" <Box<Expr>>;
+FuncSub = "fun" <LetPattern> "->" <Box<NoSemiExpr>>;
 FuncDef: ast::Expr = {
     Spanned<FuncSub> => ast::Expr::FuncDef(<>),
 }
 
 
 If: ast::Expr = {
-    "if" <Spanned<Box<Expr>>> "then" <Box<Expr>> "else" <Box<Expr>> => ast::Expr::If(<>),
+    "if" <Spanned<Box<Expr>>> "then" <Box<Expr>> "else" <Box<NoSemiExpr>> => ast::Expr::If(<>),
 }
 
 
 LetLHS = {
-    "let" <Ident> "=" <Box<Expr>>,
+    "let" <Ident> "=" <Box<NoSemiExpr>>,
 }
 LetRHS = {
-    "in" <Box<Expr>>,
+    "in" <Box<NoSemiExpr>>,
 }
 Let: ast::Expr = {
     <LetLHS> <LetRHS> => ast::Expr::Let(<>),
@@ -346,12 +346,12 @@ Match: ast::Expr = {
 
 
 RefSet: ast::Expr = {
-    <Spanned<Box<CallExpr>>> ":=" <Box<Expr>> => ast::Expr::RefSet(<>)
+    <Spanned<Box<CallExpr>>> ":=" <Box<NoSemiExpr>> => ast::Expr::RefSet(<>)
 }
 
 
 
-Expr = {
+NoSemiExpr = {
     CompareExpr,
     FuncDef,
     If,
@@ -360,6 +360,10 @@ Expr = {
     Match,
     RefSet,
 }
+Expr = {
+    <Box<NoSemiExpr>> ";" <Box<NoSemiExpr>> => ast::Expr::Seq(<>),
+    <NoSemiExpr>,
+}
 //////////////////////////////////////////////////////////////////////
 
 
@@ -367,7 +371,7 @@ Expr = {
 TopLevelItem: ast::TopLevel = {
     <LetLHS> => ast::TopLevel::LetDef(<>),
     <LetRecLHS> => ast::TopLevel::LetRecDef(<>),
-    <Expr> => ast::TopLevel::Expr(<>),
+    <NoSemiExpr> => ast::TopLevel::Expr(<>),
 }
 
 pub Script = {

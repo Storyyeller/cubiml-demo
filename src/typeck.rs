@@ -532,6 +532,11 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(lhs_type, bound)?;
             Ok(rhs_type)
         }
+        Seq(lhs_expr, rhs_expr) => {
+            let _lhs_type = check_expr(engine, bindings, lhs_expr)?;
+            let rhs_type = check_expr(engine, bindings, rhs_expr)?;
+            Ok(rhs_type)
+        }
         Typed(expr, sig) => {
             let expr_type = check_expr(engine, bindings, expr)?;
             let sig_type = parse_type_signature(engine, sig)?;
