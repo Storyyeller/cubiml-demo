@@ -3,7 +3,7 @@ use lalrpop_util::ParseError;
 use super::ast; // super instead of self because lalrpop wraps this in an internal module
 use super::spans;
 
-
+#[LALR]
 grammar(ctx: &mut spans::SpanMaker<'input>);
 
 extern {
@@ -158,7 +158,7 @@ RecordExtension = {
     <Box<CallExpr>> "with"
 }
 KeyPairExpr: (spans::Spanned<String>, Box<ast::Expr>) = {
-    <Spanned<Ident>> "=" <Box<Expr>>,
+    <Spanned<Ident>> "=" <Box<NoSemiExpr>>,
     <name: Spanned<Ident>> => (name.clone(), Box::new(ast::Expr::Variable(name))),
 }
 RecordSub = "{" <RecordExtension?> <SepListOpt<KeyPairExpr, ";">> "}";
@@ -189,6 +189,7 @@ SimpleExpr = {
     VarOrLiteral,
     "(" <Expr> ")",
     "(" <Box<Expr>> ":" <Type> ")" => ast::Expr::Typed(<>),
+    "begin" <Expr> "end",
 }
 //////////////////////////////////////////////////////////////////////
 
@@ -222,9 +223,9 @@ NewRef: ast::Expr = {
 
 CallExpr = {
     RefExpr,
-    //Call,
-    //Case,
-    //NewRef,
+    Call,
+    Case,
+    NewRef,
 }
 //////////////////////////////////////////////////////////////////////
 
@@ -275,15 +276,15 @@ CmpOp: ast::Expr = {
 
 MultExpr = {
     CallExpr,
-    //MultOp,
+    MultOp,
 }
 AddExpr = {
     MultExpr,
-    //AddOp,
+    AddOp,
 }
 CompareExpr = {
     AddExpr,
-    //CmpOp,
+    CmpOp,
 }
 //////////////////////////////////////////////////////////////////////
 
@@ -360,8 +361,15 @@ NoSemiExpr = {
     Match,
     RefSet,
 }
-Expr = {
-    <Box<NoSemiExpr>> ";" <Box<NoSemiExpr>> => ast::Expr::Seq(<>),
+Expr: ast::Expr = {
+    <lhs: TopLevelItem> ";" <rhs: Box<Expr>> => {
+        use ast::TopLevel::*;
+        match lhs {
+            Expr(lhs) => ast::Expr::Seq(Box::new(lhs), rhs),
+            LetDef(lhs) => ast::Expr::Let(lhs, rhs),
+            LetRecDef(lhs) => ast::Expr::LetRec(lhs, rhs),
+        }
+    },
     <NoSemiExpr>,
 }
 //////////////////////////////////////////////////////////////////////

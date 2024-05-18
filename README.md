@@ -19,6 +19,8 @@ Records are a grouping of zero or more named values similar to "objects" or "str
 
 There is a special shorthand syntax for fields with the same name as their value - `{a; b; c=4}` is equivalent to `{a=a; b=b; c=4}`.
 
+Unlike in Ocaml, records are structurally typed. In fact, Cubiml has *only* structural types, with no named types.
+
 #### Functions
 
 In cubiml, all functions are required to take exactly one argument for simplicity. They are defined by `fun <arg> -> <expr>`. For example, a function which returns its argument unchanged could be written as `fun x -> x`. Functions are called by simply suffixing an argument, i.e. writing `a b` where `a` is the function to be called and `b` is the argument. For example 
@@ -58,7 +60,7 @@ let sum = fun {a; b} -> a + b;
 sum {a=7; b=8}
 ```
 
-> :warning: **Function calls have different precedence than in Ocaml.** `a b c` is parsed as `a (b c)` rather than `(a b) c` as it would be in Ocaml.
+Unlike in Ocaml, `a b c` is parsed as `a (b c)` rather than `(a b) c`. Since all functions and variants have exactly one argument in Cubiml, this behavior is much more convenient than the Ocaml behavior.
 
 #### Let bindings
 
@@ -78,6 +80,7 @@ let x = 3 + 4 in
 ```
 would evaluate to `{x=7; y=14}`.
 
+
 This provides an equivalent to traditional imperative style code like the following that you might see in other languages
 
 ```js
@@ -85,6 +88,19 @@ let x = 3 + 4;
 let y = x * 2;
 return {x=x, y=y};
 ```
+
+Unlike in OCaml, you can *also* use semicolons rather than "in". `let x = 4; x + x` and `let x = 4 in x + x` are exactly equivalent except that "in" has higher precendence than ";". In most cases, you will need to wrap your code in parenthesis or `begin`/`end` when using semicolons.
+
+Therefore, the previous example could also be written using semicolons like this:
+
+```ocaml
+begin
+    let x = 3 + 4;
+    let y = x * 2;
+    {x=x; y=y}
+end
+```
+
 
 Note that the above format produces an expression which can be used in any context where an expression is expected. Cubiml follows the ML philosophy that (nearly) everything is an expression, even conditionals, function definitions, variable bindings, and other things that are statements in some languages.
 
