@@ -17,46 +17,73 @@ enum Scheme {
     PolyLetRec(Rc<RefCell<PolyLetRec>>, usize),
 }
 
-struct PolyLet{saved_bindings: Bindings, saved_expr: ast::Expr}
+struct PolyLet {
+    saved_bindings: Bindings,
+    saved_expr: ast::Expr,
+    cached: Option<Value>,
+}
 impl PolyLet {
-    fn new(saved_bindings: Bindings, saved_expr: ast::Expr) -> Self {
-        Self{saved_bindings, saved_expr}
+    fn new(saved_bindings: Bindings, saved_expr: ast::Expr, engine: &mut TypeCheckerCore) -> Result<Self> {
+        let mut s = Self {
+            saved_bindings,
+            saved_expr,
+            cached: None,
+        };
+        s.cached = Some(s.check(engine)?);
+        Ok(s)
     }
 
     fn check(&mut self, engine: &mut TypeCheckerCore) -> Result<Value> {
+        if let Some(v) = self.cached.take() {
+            return Ok(v);
+        }
         check_expr(engine, &mut self.saved_bindings, &self.saved_expr)
     }
 }
 
-struct PolyLetRec{saved_bindings: Bindings, saved_defs: Vec<(String, Box<ast::Expr>)>}
+struct PolyLetRec {
+    saved_bindings: Bindings,
+    saved_defs: Vec<(String, Box<ast::Expr>)>,
+    cached: Option<Vec<(Value, Use)>>,
+}
 impl PolyLetRec {
-    fn new(saved_bindings: Bindings, saved_defs: Vec<(String, Box<ast::Expr>)>) -> Self {
-        Self{saved_bindings, saved_defs}
+    fn new(
+        saved_bindings: Bindings,
+        saved_defs: Vec<(String, Box<ast::Expr>)>,
+        engine: &mut TypeCheckerCore,
+    ) -> Result<Self> {
+        let mut s = Self {
+            saved_bindings,
+            saved_defs,
+            cached: None,
+        };
+        s.cached = Some(s.check(engine)?);
+        Ok(s)
     }
 
     fn check(&mut self, engine: &mut TypeCheckerCore) -> Result<Vec<(Value, Use)>> {
+        if let Some(v) = self.cached.take() {
+            return Ok(v);
+        }
+
         let saved_defs = &self.saved_defs;
-                self.saved_bindings.in_child_scope(|bindings| {
-                    let mut temp_vars = Vec::with_capacity(saved_defs.len());
-                    for (name, _) in saved_defs.iter() {
-                        let (temp_type, temp_bound) = engine.var();
-                        bindings.insert(name.clone(), temp_type);
-                        temp_vars.push((temp_type, temp_bound));
-                    }
+        self.saved_bindings.in_child_scope(|bindings| {
+            let mut temp_vars = Vec::with_capacity(saved_defs.len());
+            for (name, _) in saved_defs.iter() {
+                let (temp_type, temp_bound) = engine.var();
+                bindings.insert(name.clone(), temp_type);
+                temp_vars.push((temp_type, temp_bound));
+            }
 
-                    for ((_, expr), (_, bound)) in saved_defs.iter().zip(&temp_vars) {
-                        let var_type = check_expr(engine, bindings, expr)?;
-                        engine.flow(var_type, *bound)?;
-                    }
+            for ((_, expr), (_, bound)) in saved_defs.iter().zip(&temp_vars) {
+                let var_type = check_expr(engine, bindings, expr)?;
+                engine.flow(var_type, *bound)?;
+            }
 
-                    Ok(temp_vars)
-                })
+            Ok(temp_vars)
+        })
     }
 }
-
-
-
-
 
 struct Bindings {
     m: HashMap<String, Scheme>,
@@ -607,8 +634,7 @@ fn check_let(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::
         };
         let saved_expr = expr.clone();
 
-        let mut f = PolyLet::new(saved_bindings, saved_expr);
-        f.check(engine)?;
+        let f = PolyLet::new(saved_bindings, saved_expr, engine)?;
         Ok(Scheme::PolyLet(Rc::new(RefCell::new(f))))
     } else {
         let var_type = check_expr(engine, bindings, expr)?;
@@ -627,8 +653,7 @@ fn check_let_rec_defs(
     };
     let saved_defs = defs.clone();
 
-    let mut f = PolyLetRec::new(saved_bindings, saved_defs);
-    f.check(engine)?;
+    let f = PolyLetRec::new(saved_bindings, saved_defs, engine)?;
     let f = Rc::new(RefCell::new(f));
 
     for (i, (name, _)) in defs.iter().enumerate() {
