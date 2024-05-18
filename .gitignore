@@ -9,3 +9,5 @@ local.html
 src/grammar.rs
 
 test*.ml
+perf.*
+*.svg

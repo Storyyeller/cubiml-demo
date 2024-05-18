@@ -272,6 +272,7 @@ fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::TopLevel]) -> js::Expr
     for item in parsed {
         use ast::TopLevel::*;
         match item {
+            Empty => {}
             Expr(expr) => exprs.push(compile(ctx, expr)),
             LetDef((name, var_expr)) => {
                 let rhs = compile(ctx, var_expr);
@@ -295,7 +296,11 @@ fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::TopLevel]) -> js::Expr
         }
     }
 
-    js::comma_list(exprs)
+    if exprs.is_empty() {
+        js::lit("0".to_string())
+    } else {
+        js::comma_list(exprs)
+    }
 }
 
 #[cfg(test)]

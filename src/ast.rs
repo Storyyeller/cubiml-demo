@@ -92,6 +92,7 @@ pub enum TypeExpr {
 
 #[derive(Debug, Clone)]
 pub enum TopLevel {
+    Empty,
     Expr(Expr),
     LetDef(VarDefinition),
     LetRecDef(Vec<VarDefinition>),

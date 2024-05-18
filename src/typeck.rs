@@ -665,6 +665,7 @@ fn check_let_rec_defs(
 fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &ast::TopLevel) -> Result<()> {
     use ast::TopLevel::*;
     match def {
+        Empty => {}
         Expr(expr) => {
             check_expr(engine, bindings, expr)?;
         }

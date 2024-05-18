@@ -60,16 +60,6 @@ SepListOpt<T, Sep>: Vec<T> = {
     SepList<T, Sep>,
     => Vec::new(),
 };
-// One or more items, allowing a trailing separator
-SepListTrail<T, Sep>: Vec<T> = {
-    <v:(<T> Sep)+> <e:T?> => {
-        let mut v = v;
-        if let Some(e) = e {
-            v.push(e);
-        }
-        v
-    }
-};
 
 
 
@@ -362,12 +352,13 @@ NoSemiExpr = {
     RefSet,
 }
 Expr: ast::Expr = {
-    <lhs: TopLevelItem> ";" <rhs: Box<Expr>> => {
+    <lhs: TopLevelItem> ";" <rhs: Expr> => {
         use ast::TopLevel::*;
         match lhs {
-            Expr(lhs) => ast::Expr::Seq(Box::new(lhs), rhs),
-            LetDef(lhs) => ast::Expr::Let(lhs, rhs),
-            LetRecDef(lhs) => ast::Expr::LetRec(lhs, rhs),
+            Empty => rhs,
+            Expr(lhs) => ast::Expr::Seq(Box::new(lhs), Box::new(rhs)),
+            LetDef(lhs) => ast::Expr::Let(lhs, Box::new(rhs)),
+            LetRecDef(lhs) => ast::Expr::LetRec(lhs, Box::new(rhs)),
         }
     },
     <NoSemiExpr>,
@@ -380,8 +371,9 @@ TopLevelItem: ast::TopLevel = {
     <LetLHS> => ast::TopLevel::LetDef(<>),
     <LetRecLHS> => ast::TopLevel::LetRecDef(<>),
     <NoSemiExpr> => ast::TopLevel::Expr(<>),
+    => ast::TopLevel::Empty,
 }
 
 pub Script = {
-   <SepListTrail<TopLevelItem, ";">>
+   <SepList<TopLevelItem, ";">>
 }
