@@ -13,8 +13,50 @@ type Result<T> = std::result::Result<T, SyntaxError>;
 #[derive(Clone)]
 enum Scheme {
     Mono(Value),
-    Poly(Rc<dyn Fn(&mut TypeCheckerCore) -> Result<Value>>),
+    PolyLet(Rc<RefCell<PolyLet>>),
+    PolyLetRec(Rc<RefCell<PolyLetRec>>, usize),
 }
+
+struct PolyLet{saved_bindings: Bindings, saved_expr: ast::Expr}
+impl PolyLet {
+    fn new(saved_bindings: Bindings, saved_expr: ast::Expr) -> Self {
+        Self{saved_bindings, saved_expr}
+    }
+
+    fn check(&mut self, engine: &mut TypeCheckerCore) -> Result<Value> {
+        check_expr(engine, &mut self.saved_bindings, &self.saved_expr)
+    }
+}
+
+struct PolyLetRec{saved_bindings: Bindings, saved_defs: Vec<(String, Box<ast::Expr>)>}
+impl PolyLetRec {
+    fn new(saved_bindings: Bindings, saved_defs: Vec<(String, Box<ast::Expr>)>) -> Self {
+        Self{saved_bindings, saved_defs}
+    }
+
+    fn check(&mut self, engine: &mut TypeCheckerCore) -> Result<Vec<(Value, Use)>> {
+        let saved_defs = &self.saved_defs;
+                self.saved_bindings.in_child_scope(|bindings| {
+                    let mut temp_vars = Vec::with_capacity(saved_defs.len());
+                    for (name, _) in saved_defs.iter() {
+                        let (temp_type, temp_bound) = engine.var();
+                        bindings.insert(name.clone(), temp_type);
+                        temp_vars.push((temp_type, temp_bound));
+                    }
+
+                    for ((_, expr), (_, bound)) in saved_defs.iter().zip(&temp_vars) {
+                        let var_type = check_expr(engine, bindings, expr)?;
+                        engine.flow(var_type, *bound)?;
+                    }
+
+                    Ok(temp_vars)
+                })
+    }
+}
+
+
+
+
 
 struct Bindings {
     m: HashMap<String, Scheme>,
@@ -547,7 +589,8 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             if let Some(scheme) = bindings.get(name.as_str()) {
                 match scheme {
                     Scheme::Mono(v) => Ok(*v),
-                    Scheme::Poly(cb) => cb(engine),
+                    Scheme::PolyLet(cb) => cb.borrow_mut().check(engine),
+                    Scheme::PolyLetRec(cb, i) => Ok(cb.borrow_mut().check(engine)?[*i].0),
                 }
             } else {
                 Err(SyntaxError::new1(format!("SyntaxError: Undefined variable {}", name), *span))
@@ -558,17 +601,15 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
 
 fn check_let(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::Expr) -> Result<Scheme> {
     if let ast::Expr::FuncDef(..) = expr {
-        let saved_bindings = RefCell::new(Bindings {
+        let saved_bindings = Bindings {
             m: bindings.m.clone(),
             changes: Vec::new(),
-        });
+        };
         let saved_expr = expr.clone();
 
-        let f: Rc<dyn Fn(&mut TypeCheckerCore) -> Result<Value>> =
-            Rc::new(move |engine| check_expr(engine, &mut saved_bindings.borrow_mut(), &saved_expr));
-
-        f(engine)?;
-        Ok(Scheme::Poly(f))
+        let mut f = PolyLet::new(saved_bindings, saved_expr);
+        f.check(engine)?;
+        Ok(Scheme::PolyLet(Rc::new(RefCell::new(f))))
     } else {
         let var_type = check_expr(engine, bindings, expr)?;
         Ok(Scheme::Mono(var_type))
@@ -580,35 +621,18 @@ fn check_let_rec_defs(
     bindings: &mut Bindings,
     defs: &Vec<(String, Box<ast::Expr>)>,
 ) -> Result<()> {
-    let saved_bindings = RefCell::new(Bindings {
+    let saved_bindings = Bindings {
         m: bindings.m.clone(),
         changes: Vec::new(),
-    });
+    };
     let saved_defs = defs.clone();
 
-    let f: Rc<dyn Fn(&mut TypeCheckerCore, usize) -> Result<Value>> = Rc::new(move |engine, i| {
-        saved_bindings.borrow_mut().in_child_scope(|bindings| {
-            let mut temp_vars = Vec::with_capacity(saved_defs.len());
-            for (name, _) in &saved_defs {
-                let (temp_type, temp_bound) = engine.var();
-                bindings.insert(name.clone(), temp_type);
-                temp_vars.push((temp_type, temp_bound));
-            }
-
-            for ((_, expr), (_, bound)) in saved_defs.iter().zip(&temp_vars) {
-                let var_type = check_expr(engine, bindings, expr)?;
-                engine.flow(var_type, *bound)?;
-            }
-
-            Ok(temp_vars[i].0)
-        })
-    });
-    f(engine, 0)?;
+    let mut f = PolyLetRec::new(saved_bindings, saved_defs);
+    f.check(engine)?;
+    let f = Rc::new(RefCell::new(f));
 
     for (i, (name, _)) in defs.iter().enumerate() {
-        let f = f.clone();
-        let scheme = Scheme::Poly(Rc::new(move |engine| f(engine, i)));
-        bindings.insert_scheme(name.clone(), scheme);
+        bindings.insert_scheme(name.clone(), Scheme::PolyLetRec(f.clone(), i));
     }
     Ok(())
 }
