@@ -85,6 +85,7 @@ impl PolyLetRec {
     }
 }
 
+struct UnwindPoint(usize);
 struct Bindings {
     m: HashMap<String, Scheme>,
     changes: Vec<(String, Option<Scheme>)>,
@@ -110,7 +111,12 @@ impl Bindings {
         self.insert_scheme(k, Scheme::Mono(v))
     }
 
-    fn unwind(&mut self, n: usize) {
+    fn unwind_point(&mut self) -> UnwindPoint {
+        UnwindPoint(self.changes.len())
+    }
+
+    fn unwind(&mut self, n: UnwindPoint) {
+        let n = n.0;
         while self.changes.len() > n {
             let (k, old) = self.changes.pop().unwrap();
             match old {
@@ -121,7 +127,7 @@ impl Bindings {
     }
 
     fn in_child_scope<T>(&mut self, cb: impl FnOnce(&mut Self) -> T) -> T {
-        let n = self.changes.len();
+        let n = self.unwind_point();
         let res = cb(self);
         self.unwind(n);
         res
@@ -474,11 +480,13 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             Ok(merged)
         }
         Let((name, var_expr), rest_expr) => {
-            let var_scheme = check_let(engine, bindings, var_expr)?;
-            bindings.in_child_scope(|bindings| {
-                bindings.insert_scheme(name.clone(), var_scheme);
-                check_expr(engine, bindings, rest_expr)
-            })
+            let mark = bindings.unwind_point();
+
+            check_let_def(engine, bindings, name.clone(), var_expr)?;
+            let result_type = check_expr(engine, bindings, rest_expr)?;
+
+            bindings.unwind(mark);
+            Ok(result_type)
         }
         LetRec(defs, rest_expr) => bindings.in_child_scope(|bindings| {
             check_let_rec_defs(engine, bindings, defs)?;
@@ -626,7 +634,7 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
     }
 }
 
-fn check_let(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::Expr) -> Result<Scheme> {
+fn check_let_def(engine: &mut TypeCheckerCore, bindings: &mut Bindings, name: String, expr: &ast::Expr) -> Result<()> {
     if let ast::Expr::FuncDef(..) = expr {
         let saved_bindings = Bindings {
             m: bindings.m.clone(),
@@ -635,11 +643,12 @@ fn check_let(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast::
         let saved_expr = expr.clone();
 
         let f = PolyLet::new(saved_bindings, saved_expr, engine)?;
-        Ok(Scheme::PolyLet(Rc::new(RefCell::new(f))))
+        bindings.insert_scheme(name, Scheme::PolyLet(Rc::new(RefCell::new(f))));
     } else {
         let var_type = check_expr(engine, bindings, expr)?;
-        Ok(Scheme::Mono(var_type))
+        bindings.insert(name, var_type);
     }
+    Ok(())
 }
 
 fn check_let_rec_defs(
@@ -670,8 +679,7 @@ fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &a
             check_expr(engine, bindings, expr)?;
         }
         LetDef((name, var_expr)) => {
-            let var_scheme = check_let(engine, bindings, var_expr)?;
-            bindings.insert_scheme(name.clone(), var_scheme);
+            check_let_def(engine, bindings, name.clone(), var_expr)?;
         }
         LetRecDef(defs) => {
             check_let_rec_defs(engine, bindings, defs)?;
@@ -696,12 +704,14 @@ impl TypeckState {
         // Create temporary copy of the entire type state so we can roll
         // back all the changes if the script contains an error.
         let temp = self.core.save();
+        assert!(self.bindings.changes.is_empty());
+        let mark = self.bindings.unwind_point();
 
         for item in parsed {
             if let Err(e) = check_toplevel(&mut self.core, &mut self.bindings, item) {
                 // Roll back changes to the type state and bindings
                 self.core.restore(temp);
-                self.bindings.unwind(0);
+                self.bindings.unwind(mark);
                 return Err(e);
             }
         }

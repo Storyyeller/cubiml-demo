@@ -36,6 +36,7 @@ pub enum OpType {
     AnyCmp,
 }
 
+type LetDefinition = (String, Box<Expr>);
 type VarDefinition = (String, Box<Expr>);
 
 #[derive(Debug, Clone)]
@@ -58,7 +59,7 @@ pub enum Expr {
     FieldAccess(Box<Expr>, String, Span),
     FuncDef(Spanned<(LetPattern, Box<Expr>)>),
     If(Spanned<Box<Expr>>, Box<Expr>, Box<Expr>),
-    Let(VarDefinition, Box<Expr>),
+    Let(LetDefinition, Box<Expr>),
     LetRec(Vec<VarDefinition>, Box<Expr>),
     Literal(Literal, Spanned<String>),
     Match(Box<Expr>, Vec<(Spanned<MatchPattern>, Box<Expr>)>, Span),
@@ -94,6 +95,6 @@ pub enum TypeExpr {
 pub enum TopLevel {
     Empty,
     Expr(Expr),
-    LetDef(VarDefinition),
+    LetDef(LetDefinition),
     LetRecDef(Vec<VarDefinition>),
 }
