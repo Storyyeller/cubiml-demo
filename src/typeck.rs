@@ -479,10 +479,10 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(else_type, merged_bound)?;
             Ok(merged)
         }
-        Let((name, var_expr), rest_expr) => {
+        Let((pattern, var_expr), rest_expr) => {
             let mark = bindings.unwind_point();
 
-            check_let_def(engine, bindings, name.clone(), var_expr)?;
+            check_let_def(engine, bindings, pattern, var_expr)?;
             let result_type = check_expr(engine, bindings, rest_expr)?;
 
             bindings.unwind(mark);
@@ -634,8 +634,19 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
     }
 }
 
-fn check_let_def(engine: &mut TypeCheckerCore, bindings: &mut Bindings, name: String, expr: &ast::Expr) -> Result<()> {
-    if let ast::Expr::FuncDef(..) = expr {
+fn check_let_def(
+    engine: &mut TypeCheckerCore,
+    bindings: &mut Bindings,
+    lhs: &ast::LetPattern,
+    expr: &ast::Expr,
+) -> Result<()> {
+    use ast::LetPattern::*;
+    if let ast::Expr::FuncDef((_, span)) = expr {
+        let name = match lhs {
+            Var(name) => name.to_owned(),
+            _ => return Err(SyntaxError::new1(format!("TypeError: Cannot destructure function"), *span)),
+        };
+
         let saved_bindings = Bindings {
             m: bindings.m.clone(),
             changes: Vec::new(),
@@ -646,7 +657,8 @@ fn check_let_def(engine: &mut TypeCheckerCore, bindings: &mut Bindings, name: St
         bindings.insert_scheme(name, Scheme::PolyLet(Rc::new(RefCell::new(f))));
     } else {
         let var_type = check_expr(engine, bindings, expr)?;
-        bindings.insert(name, var_type);
+        let bound = process_let_pattern(engine, bindings, lhs)?;
+        engine.flow(var_type, bound)?;
     }
     Ok(())
 }
@@ -678,8 +690,8 @@ fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &a
         Expr(expr) => {
             check_expr(engine, bindings, expr)?;
         }
-        LetDef((name, var_expr)) => {
-            check_let_def(engine, bindings, name.clone(), var_expr)?;
+        LetDef((pattern, var_expr)) => {
+            check_let_def(engine, bindings, pattern, var_expr)?;
         }
         LetRecDef(defs) => {
             check_let_rec_defs(engine, bindings, defs)?;

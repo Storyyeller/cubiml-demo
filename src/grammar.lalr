@@ -299,7 +299,7 @@ If: ast::Expr = {
 
 
 LetLHS = {
-    "let" <Ident> "=" <Box<NoSemiExpr>>,
+    "let" <LetPattern> "=" <Box<NoSemiExpr>>,
 }
 LetRHS = {
     "in" <Box<NoSemiExpr>>,

@@ -36,7 +36,7 @@ pub enum OpType {
     AnyCmp,
 }
 
-type LetDefinition = (String, Box<Expr>);
+type LetDefinition = (LetPattern, Box<Expr>);
 type VarDefinition = (String, Box<Expr>);
 
 #[derive(Debug, Clone)]

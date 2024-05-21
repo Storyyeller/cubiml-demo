@@ -66,6 +66,13 @@ impl ModuleBuilder {
         js_name
     }
 
+    fn new_temp_var(&mut self) -> js::Expr {
+        let js_name = format!("t{}", self.var_counter);
+        self.var_counter += 1;
+
+        js::field(self.scope_expr.clone(), js_name)
+    }
+
     fn new_var(&mut self, ml_name: &str) -> js::Expr {
         let js_name = self.new_var_name();
         let expr = js::field(self.scope_expr.clone(), js_name);
@@ -143,13 +150,14 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let else_expr = compile(ctx, else_expr);
             js::ternary(cond_expr, then_expr, else_expr)
         }
-        ast::Expr::Let((name, var_expr), rest_expr) => {
+        ast::Expr::Let((pat, var_expr), rest_expr) => {
             let rhs = compile(ctx, var_expr);
 
             ctx.ml_scope(|ctx| {
-                let lhs = ctx.new_var(name);
-                let rest = compile(ctx, rest_expr);
-                js::comma_pair(js::assign(lhs, rhs), rest)
+                let mut exprs = Vec::new(); // a list of assignments, followed by rest
+                compile_let_pattern_flat(ctx, &mut exprs, pat, rhs);
+                exprs.push(compile(ctx, rest_expr));
+                js::comma_list(exprs)
             })
         }
         ast::Expr::LetRec(defs, rest_expr) => {
@@ -248,6 +256,25 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
     }
 }
 
+fn compile_let_pattern_flat(ctx: &mut ModuleBuilder, out: &mut Vec<js::Expr>, pat: &ast::LetPattern, rhs: js::Expr) {
+    use ast::LetPattern::*;
+    match pat {
+        Var(ml_name) => {
+            let lhs = ctx.new_var(ml_name);
+            out.push(js::assign(lhs, rhs));
+        }
+        Record(pairs) => {
+            // Assign the rhs to a temporary value, and then do a = temp.foo for each field
+            let lhs = ctx.new_temp_var();
+            out.push(js::assign(lhs.clone(), rhs));
+
+            for ((name, _), pat) in pairs.iter() {
+                compile_let_pattern_flat(ctx, out, pat, js::field(lhs.clone(), name.clone()));
+            }
+        }
+    }
+}
+
 fn compile_let_pattern(ctx: &mut ModuleBuilder, pat: &ast::LetPattern) -> js::Expr {
     use ast::LetPattern::*;
     match pat {
@@ -274,10 +301,9 @@ fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::TopLevel]) -> js::Expr
         match item {
             Empty => {}
             Expr(expr) => exprs.push(compile(ctx, expr)),
-            LetDef((name, var_expr)) => {
+            LetDef((pat, var_expr)) => {
                 let rhs = compile(ctx, var_expr);
-                let lhs = ctx.new_var(name);
-                exprs.push(js::assign(lhs, rhs));
+                compile_let_pattern_flat(ctx, &mut exprs, pat, rhs);
             }
             LetRecDef(defs) => {
                 let mut vars = Vec::new();
