@@ -132,6 +132,9 @@ true
 {x={}; other=false}
 ```
 
+You can also use destructuring patterns in let assignments. For example, `let {a; b=c} = {a=3; b=4};` results in two variables, `a` set to 3 and `c` set to 4.
+
+
 #### Recursive let bindings
 
 Sometimes, one wishes to have functions that call themselves recursively. Unfortunately, this is impossible with the above constructs since plain let-expressions can only refer to variables that were already defined. 

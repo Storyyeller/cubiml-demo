@@ -67,6 +67,7 @@ pub enum Expr {
     Record(Option<Box<Expr>>, Vec<(Spanned<String>, Box<Expr>)>, Span),
     RefGet(Spanned<Box<Expr>>),
     RefSet(Spanned<Box<Expr>>, Box<Expr>),
+    Println(Vec<Expr>, Box<Expr>),
     Seq(Box<Expr>, Box<Expr>),
     Typed(Box<Expr>, TypeExpr),
     Variable(Spanned<String>),
@@ -97,4 +98,5 @@ pub enum TopLevel {
     Expr(Expr),
     LetDef(LetDefinition),
     LetRecDef(Vec<VarDefinition>),
+    Println(Vec<Expr>),
 }

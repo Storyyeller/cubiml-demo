@@ -59,6 +59,10 @@ pub fn comma_list(mut exprs: Vec<Expr>) -> Expr {
     Expr(res)
 }
 
+pub fn println(exprs: Vec<Expr>) -> Expr {
+    Expr(Expr2::Print(exprs.into_iter().map(|e| e.0).collect()))
+}
+
 pub fn func(arg: Expr, scope: String, body: Expr) -> Expr {
     Expr(Expr2::ArrowFunc(Box::new(arg.0), scope, Box::new(body.0)))
 }
@@ -144,6 +148,9 @@ enum Expr2 {
     ArrowFunc(Box<Expr2>, String, Box<Expr2>),
 
     Comma(Box<Expr2>, Box<Expr2>),
+
+    // Temp hack
+    Print(Vec<Expr2>),
 }
 impl Expr2 {
     fn precedence(&self) -> Precedence {
@@ -168,6 +175,7 @@ impl Expr2 {
             Assignment(..) => ASSIGN,
             ArrowFunc(..) => ASSIGN,
             Comma(..) => EXPR,
+            Print(..) => CALL,
         }
     }
 
@@ -187,6 +195,7 @@ impl Expr2 {
             Assignment(lhs, ..) => lhs.first(),
             ArrowFunc(..) => PAREN,
             Comma(lhs, ..) => lhs.first(),
+            Print(..) => OTHER,
         }
     }
 
@@ -286,6 +295,14 @@ impl Expr2 {
                 *out += ", ";
                 rhs.write(out);
             }
+            Self::Print(exprs) => {
+                *out += "p.println(";
+                for ex in exprs {
+                    ex.write(out);
+                    *out += ", ";
+                }
+                *out += ")";
+            }
         }
     }
 
@@ -379,6 +396,12 @@ impl Expr2 {
                 lhs.add_parens();
                 rhs.add_parens();
                 rhs.ensure(ASSIGN);
+            }
+            Self::Print(exprs) => {
+                for ex in exprs {
+                    ex.add_parens();
+                    ex.ensure(PRIMARY);
+                }
             }
         }
     }

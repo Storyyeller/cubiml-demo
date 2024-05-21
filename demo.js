@@ -95,8 +95,8 @@ let area = fun x ->
         | \`Square x -> x.len *. x.len
         | \`Rect x -> x.height *. x.width;
 
-area \`Square {len=4.};
-area \`Rect {height=4.; width=2.5};
+print "area \`Square {len=4.}; =", area \`Square {len=4.};
+print "area \`Rect {height=4.; width=2.5}; =", area \`Rect {height=4.; width=2.5};
 
 (* wildcard match delegates to first area function
     for the non-Circle cases in a type safe manner *)
@@ -105,13 +105,14 @@ let area = fun x ->
         | \`Circle x -> x.radius *. x.radius *. 3.1415926
         | x -> area x;
 
-area \`Square {len=4.};
-area \`Rect {height=4.; width=2.5};
-area \`Circle {radius=1.2};
+print "area \`Square {len=4.}; =", area \`Square {len=4.};
+print "area \`Rect {height=4.; width=2.5}; =", area \`Rect {height=4.; width=2.5};
+print "area \`Circle {radius=1.2}; =", area \`Circle {radius=1.2};
+
 
 (* ints are arbitrary precision *)
 (* 999th fibonacci number = 43466557686937456435688527675040625802564660517371780402481729089536555417949051890403879840079255169295922593080322634775209689623239873322471161642996440906533187938298969649928516003704476137795166849228875 *)
-fib 999
+print "fib 999 =", fib 999;
 
 
         </textarea>
@@ -180,8 +181,10 @@ function initializeRepl(root, compiler, Printer) {
         }
 
         try {
+            const p = new Printer;
             const val = eval(compiled);
-            return [true, (new Printer).print(val)];
+            p.visit(val);
+            return [true, p.parts.join('')];
         } catch (e) {
             return [false, 'An error occurred during evaluation in the repl: ' + e.toString()];
         }
@@ -302,5 +305,19 @@ class Printer {
         }
     }
 
-    print(e) {this.visit(e); return this.parts.join('');}
+    println(...args) {
+        for (let arg of args) {
+            if (typeof arg === 'string') {
+                this.parts.push(arg);
+            } else {
+                this.visit(arg);
+            }
+
+            this.parts.push(' ');
+        }
+        this.parts.pop();
+        this.parts.push('\n');
+    }
+
+    // print(e) {this.visit(e); return this.parts.join('');}
 }

@@ -246,6 +246,12 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let rhs = compile(ctx, rhs_expr);
             js::assign(js::field(lhs, "$p".to_string()), rhs)
         }
+        ast::Expr::Println(exprs, rest_expr) => {
+            let args = exprs.iter().map(|expr| compile(ctx, expr)).collect();
+            let lhs = js::println(args);
+            let rhs = compile(ctx, rest_expr);
+            js::comma_pair(lhs, rhs)
+        }
         ast::Expr::Seq(lhs_expr, rhs_expr) => {
             let lhs = compile(ctx, lhs_expr);
             let rhs = compile(ctx, rhs_expr);
@@ -318,6 +324,10 @@ fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::TopLevel]) -> js::Expr
                 for (lhs, rhs) in vars.into_iter().zip(rhs_exprs) {
                     exprs.push(js::assign(lhs, rhs));
                 }
+            }
+            Println(args) => {
+                let args = args.iter().map(|expr| compile(ctx, expr)).collect();
+                exprs.push(js::println(args));
             }
         }
     }

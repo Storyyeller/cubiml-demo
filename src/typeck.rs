@@ -609,6 +609,12 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(lhs_type, bound)?;
             Ok(rhs_type)
         }
+        Println(args, rest_expr) => {
+            for arg in args {
+                check_expr(engine, bindings, arg)?;
+            }
+            check_expr(engine, bindings, rest_expr)
+        }
         Seq(lhs_expr, rhs_expr) => {
             let _lhs_type = check_expr(engine, bindings, lhs_expr)?;
             let rhs_type = check_expr(engine, bindings, rhs_expr)?;
@@ -695,6 +701,11 @@ fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &a
         }
         LetRecDef(defs) => {
             check_let_rec_defs(engine, bindings, defs)?;
+        }
+        Println(exprs) => {
+            for expr in exprs {
+                check_expr(engine, bindings, expr)?;
+            }
         }
     };
     Ok(())
