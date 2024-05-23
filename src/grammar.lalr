@@ -352,8 +352,8 @@ NoSemiExpr = {
     RefSet,
 }
 Expr: ast::Expr = {
-    <lhs: TopLevelItem> ";" <rhs: Expr> => {
-        use ast::TopLevel::*;
+    <lhs: Statement> ";" <rhs: Expr> => {
+        use ast::Statement::*;
         match lhs {
             Empty => rhs,
             Expr(lhs) => ast::Expr::Seq(Box::new(lhs), Box::new(rhs)),
@@ -368,14 +368,14 @@ Expr: ast::Expr = {
 
 
 
-TopLevelItem: ast::TopLevel = {
-    <LetLHS> => ast::TopLevel::LetDef(<>),
-    <LetRecLHS> => ast::TopLevel::LetRecDef(<>),
-    <NoSemiExpr> => ast::TopLevel::Expr(<>),
-    "print" <SepListOpt<NoSemiExpr, ",">> => ast::TopLevel::Println(<>),
-    => ast::TopLevel::Empty,
+Statement: ast::Statement = {
+    <LetLHS> => ast::Statement::LetDef(<>),
+    <LetRecLHS> => ast::Statement::LetRecDef(<>),
+    <NoSemiExpr> => ast::Statement::Expr(<>),
+    "print" <SepListOpt<NoSemiExpr, ",">> => ast::Statement::Println(<>),
+    => ast::Statement::Empty,
 }
 
 pub Script = {
-   <SepList<TopLevelItem, ";">>
+   <SepList<Statement, ";">>
 }

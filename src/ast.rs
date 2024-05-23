@@ -93,7 +93,7 @@ pub enum TypeExpr {
 }
 
 #[derive(Debug, Clone)]
-pub enum TopLevel {
+pub enum Statement {
     Empty,
     Expr(Expr),
     LetDef(LetDefinition),

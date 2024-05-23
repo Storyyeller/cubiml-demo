@@ -689,8 +689,8 @@ fn check_let_rec_defs(
     Ok(())
 }
 
-fn check_toplevel(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &ast::TopLevel) -> Result<()> {
-    use ast::TopLevel::*;
+fn check_statement(engine: &mut TypeCheckerCore, bindings: &mut Bindings, def: &ast::Statement) -> Result<()> {
+    use ast::Statement::*;
     match def {
         Empty => {}
         Expr(expr) => {
@@ -723,7 +723,7 @@ impl TypeckState {
         }
     }
 
-    pub fn check_script(&mut self, parsed: &[ast::TopLevel]) -> Result<()> {
+    pub fn check_script(&mut self, parsed: &[ast::Statement]) -> Result<()> {
         // Create temporary copy of the entire type state so we can roll
         // back all the changes if the script contains an error.
         let temp = self.core.save();
@@ -731,7 +731,7 @@ impl TypeckState {
         let mark = self.bindings.unwind_point();
 
         for item in parsed {
-            if let Err(e) = check_toplevel(&mut self.core, &mut self.bindings, item) {
+            if let Err(e) = check_statement(&mut self.core, &mut self.bindings, item) {
                 // Roll back changes to the type state and bindings
                 self.core.restore(temp);
                 self.bindings.unwind(mark);

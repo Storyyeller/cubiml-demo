@@ -24,7 +24,7 @@ impl ModuleBuilder {
         }
     }
 
-    pub fn compile_script(&mut self, def: &[ast::TopLevel]) -> js::Expr {
+    pub fn compile_script(&mut self, def: &[ast::Statement]) -> js::Expr {
         compile_script(self, def)
     }
 
@@ -299,11 +299,11 @@ fn compile_let_pattern(ctx: &mut ModuleBuilder, pat: &ast::LetPattern) -> js::Ex
     }
 }
 
-fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::TopLevel]) -> js::Expr {
+fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::Statement]) -> js::Expr {
     let mut exprs = Vec::new();
 
     for item in parsed {
-        use ast::TopLevel::*;
+        use ast::Statement::*;
         match item {
             Empty => {}
             Expr(expr) => exprs.push(compile(ctx, expr)),
