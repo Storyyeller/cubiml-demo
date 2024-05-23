@@ -54,21 +54,18 @@ pub enum MatchPattern {
 #[derive(Debug, Clone)]
 pub enum Expr {
     BinOp(Spanned<Box<Expr>>, Spanned<Box<Expr>>, OpType, Op, Span),
+    Block(Vec<Statement>, Box<Expr>),
     Call(Box<Expr>, Box<Expr>, Span),
     Case(Spanned<String>, Box<Expr>),
     FieldAccess(Box<Expr>, String, Span),
     FuncDef(Spanned<(LetPattern, Box<Expr>)>),
     If(Spanned<Box<Expr>>, Box<Expr>, Box<Expr>),
-    Let(LetDefinition, Box<Expr>),
-    LetRec(Vec<VarDefinition>, Box<Expr>),
     Literal(Literal, Spanned<String>),
     Match(Box<Expr>, Vec<(Spanned<MatchPattern>, Box<Expr>)>, Span),
     NewRef(Box<Expr>, Span),
     Record(Option<Box<Expr>>, Vec<(Spanned<String>, Box<Expr>)>, Span),
     RefGet(Spanned<Box<Expr>>),
     RefSet(Spanned<Box<Expr>>, Box<Expr>),
-    Println(Vec<Expr>, Box<Expr>),
-    Seq(Box<Expr>, Box<Expr>),
     Typed(Box<Expr>, TypeExpr),
     Variable(Spanned<String>),
 }

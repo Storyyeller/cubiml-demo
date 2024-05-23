@@ -115,6 +115,18 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             };
             js::binop(lhs, rhs, jsop)
         }
+        ast::Expr::Block(statements, rest_expr) => {
+            ctx.ml_scope(|ctx| {
+                let mut exprs = Vec::new(); // a list of assignments, followed by rest
+
+                for stmt in statements {
+                    compile_statement(ctx, &mut exprs, stmt);
+                }
+
+                exprs.push(compile(ctx, rest_expr));
+                js::comma_list(exprs)
+            })
+        }
         ast::Expr::Call(func, arg, _) => {
             let lhs = compile(ctx, func);
             let rhs = compile(ctx, arg);
@@ -149,37 +161,6 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let then_expr = compile(ctx, then_expr);
             let else_expr = compile(ctx, else_expr);
             js::ternary(cond_expr, then_expr, else_expr)
-        }
-        ast::Expr::Let((pat, var_expr), rest_expr) => {
-            let rhs = compile(ctx, var_expr);
-
-            ctx.ml_scope(|ctx| {
-                let mut exprs = Vec::new(); // a list of assignments, followed by rest
-                compile_let_pattern_flat(ctx, &mut exprs, pat, rhs);
-                exprs.push(compile(ctx, rest_expr));
-                js::comma_list(exprs)
-            })
-        }
-        ast::Expr::LetRec(defs, rest_expr) => {
-            ctx.ml_scope(|ctx| {
-                // let temp = defs.iter().map(|(name, _)| ctx.new_var(name)).collect::<Vec<_>>();
-                let mut vars = Vec::new();
-                let mut exprs = Vec::new();
-                for (name, _) in defs {
-                    vars.push(ctx.new_var(name))
-                }
-                for (_, expr) in defs {
-                    exprs.push(compile(ctx, expr))
-                }
-
-                let mut exprs = vars
-                    .into_iter()
-                    .zip(exprs)
-                    .map(|(lhs, rhs)| js::assign(lhs, rhs))
-                    .collect::<Vec<_>>();
-                exprs.push(compile(ctx, rest_expr));
-                js::comma_list(exprs)
-            })
         }
         ast::Expr::Literal(type_, (code, _)) => {
             let mut code = code.clone();
@@ -246,17 +227,6 @@ fn compile(ctx: &mut ModuleBuilder, expr: &ast::Expr) -> js::Expr {
             let rhs = compile(ctx, rhs_expr);
             js::assign(js::field(lhs, "$p".to_string()), rhs)
         }
-        ast::Expr::Println(exprs, rest_expr) => {
-            let args = exprs.iter().map(|expr| compile(ctx, expr)).collect();
-            let lhs = js::println(args);
-            let rhs = compile(ctx, rest_expr);
-            js::comma_pair(lhs, rhs)
-        }
-        ast::Expr::Seq(lhs_expr, rhs_expr) => {
-            let lhs = compile(ctx, lhs_expr);
-            let rhs = compile(ctx, rhs_expr);
-            js::comma_pair(lhs, rhs)
-        }
         ast::Expr::Typed(expr, _) => compile(ctx, expr),
         ast::Expr::Variable((name, _)) => ctx.bindings.get(name).unwrap().clone(),
     }
@@ -299,37 +269,41 @@ fn compile_let_pattern(ctx: &mut ModuleBuilder, pat: &ast::LetPattern) -> js::Ex
     }
 }
 
+fn compile_statement(ctx: &mut ModuleBuilder, exprs: &mut Vec<js::Expr>, stmt: &ast::Statement) {
+    use ast::Statement::*;
+    match stmt {
+        Empty => {}
+        Expr(expr) => exprs.push(compile(ctx, expr)),
+        LetDef((pat, var_expr)) => {
+            let rhs = compile(ctx, var_expr);
+            compile_let_pattern_flat(ctx, exprs, pat, rhs);
+        }
+        LetRecDef(defs) => {
+            let mut vars = Vec::new();
+            let mut rhs_exprs = Vec::new();
+            for (name, _) in defs {
+                vars.push(ctx.new_var(name))
+            }
+            for (_, expr) in defs {
+                rhs_exprs.push(compile(ctx, expr))
+            }
+
+            for (lhs, rhs) in vars.into_iter().zip(rhs_exprs) {
+                exprs.push(js::assign(lhs, rhs));
+            }
+        }
+        Println(args) => {
+            let args = args.iter().map(|expr| compile(ctx, expr)).collect();
+            exprs.push(js::println(args));
+        }
+    }
+}
+
 fn compile_script(ctx: &mut ModuleBuilder, parsed: &[ast::Statement]) -> js::Expr {
     let mut exprs = Vec::new();
 
     for item in parsed {
-        use ast::Statement::*;
-        match item {
-            Empty => {}
-            Expr(expr) => exprs.push(compile(ctx, expr)),
-            LetDef((pat, var_expr)) => {
-                let rhs = compile(ctx, var_expr);
-                compile_let_pattern_flat(ctx, &mut exprs, pat, rhs);
-            }
-            LetRecDef(defs) => {
-                let mut vars = Vec::new();
-                let mut rhs_exprs = Vec::new();
-                for (name, _) in defs {
-                    vars.push(ctx.new_var(name))
-                }
-                for (_, expr) in defs {
-                    rhs_exprs.push(compile(ctx, expr))
-                }
-
-                for (lhs, rhs) in vars.into_iter().zip(rhs_exprs) {
-                    exprs.push(js::assign(lhs, rhs));
-                }
-            }
-            Println(args) => {
-                let args = args.iter().map(|expr| compile(ctx, expr)).collect();
-                exprs.push(js::println(args));
-            }
-        }
+        compile_statement(ctx, &mut exprs, item);
     }
 
     if exprs.is_empty() {

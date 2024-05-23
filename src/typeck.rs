@@ -404,6 +404,18 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
                 AnyCmp => engine.bool(*full_span),
             })
         }
+        Block(statements, rest_expr) => {
+            assert!(statements.len() >= 1);
+            let mark = bindings.unwind_point();
+
+            for stmt in statements.iter() {
+                check_statement(engine, bindings, stmt)?;
+            }
+
+            let result_type = check_expr(engine, bindings, rest_expr)?;
+            bindings.unwind(mark);
+            Ok(result_type)
+        }
         Call(func_expr, arg_expr, span) => {
             let func_type = check_expr(engine, bindings, func_expr)?;
             let arg_type = check_expr(engine, bindings, arg_expr)?;
@@ -479,19 +491,6 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
             engine.flow(else_type, merged_bound)?;
             Ok(merged)
         }
-        Let((pattern, var_expr), rest_expr) => {
-            let mark = bindings.unwind_point();
-
-            check_let_def(engine, bindings, pattern, var_expr)?;
-            let result_type = check_expr(engine, bindings, rest_expr)?;
-
-            bindings.unwind(mark);
-            Ok(result_type)
-        }
-        LetRec(defs, rest_expr) => bindings.in_child_scope(|bindings| {
-            check_let_rec_defs(engine, bindings, defs)?;
-            check_expr(engine, bindings, rest_expr)
-        }),
         Literal(type_, (code, span)) => {
             use ast::Literal::*;
             let span = *span;
@@ -607,17 +606,6 @@ fn check_expr(engine: &mut TypeCheckerCore, bindings: &mut Bindings, expr: &ast:
 
             let bound = engine.reference_use(Some(rhs_type), None, *lhs_span);
             engine.flow(lhs_type, bound)?;
-            Ok(rhs_type)
-        }
-        Println(args, rest_expr) => {
-            for arg in args {
-                check_expr(engine, bindings, arg)?;
-            }
-            check_expr(engine, bindings, rest_expr)
-        }
-        Seq(lhs_expr, rhs_expr) => {
-            let _lhs_type = check_expr(engine, bindings, lhs_expr)?;
-            let rhs_type = check_expr(engine, bindings, rhs_expr)?;
             Ok(rhs_type)
         }
         Typed(expr, sig) => {

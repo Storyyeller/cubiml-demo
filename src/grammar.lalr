@@ -305,7 +305,7 @@ LetRHS = {
     "in" <Box<NoSemiExpr>>,
 }
 Let: ast::Expr = {
-    <LetLHS> <LetRHS> => ast::Expr::Let(<>),
+    <lhs: LetLHS> <rhs: LetRHS> => ast::Expr::Block(vec![ast::Statement::LetDef(lhs)], rhs),
 }
 
 
@@ -316,7 +316,7 @@ LetRecLHS = {
     "let" "rec" <SepList<LetRecDef, "and">>,
 }
 LetRec: ast::Expr = {
-     <LetRecLHS> <LetRHS> => ast::Expr::LetRec(<>),
+     <lhs: LetRecLHS> <rhs: LetRHS> => ast::Expr::Block(vec![ast::Statement::LetRecDef(lhs)], rhs),
 }
 
 
@@ -352,17 +352,13 @@ NoSemiExpr = {
     RefSet,
 }
 Expr: ast::Expr = {
-    <lhs: Statement> ";" <rhs: Expr> => {
-        use ast::Statement::*;
-        match lhs {
-            Empty => rhs,
-            Expr(lhs) => ast::Expr::Seq(Box::new(lhs), Box::new(rhs)),
-            LetDef(lhs) => ast::Expr::Let(lhs, Box::new(rhs)),
-            LetRecDef(lhs) => ast::Expr::LetRec(lhs, Box::new(rhs)),
-            Println(exprs) => ast::Expr::Println(exprs, Box::new(rhs)),
+    <stmts: (<Statement> ";")*> <rest: NoSemiExpr> => {
+        if stmts.is_empty() {
+            rest
+        } else {
+            ast::Expr::Block(stmts, Box::new(rest))
         }
-    },
-    <NoSemiExpr>,
+    }
 }
 //////////////////////////////////////////////////////////////////////
 
