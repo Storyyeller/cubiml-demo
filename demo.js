@@ -143,7 +143,7 @@ class CubimlDemo extends HTMLElement {
 
     mod_promise.then(
         wasm => initializeRepl(shadow, mod.State.new(), Printer)).catch(
-        e => {root.getElementById('loading').textContent = 'Failed to load demo: ' + e});
+        e => {shadow.getElementById('loading').textContent = 'Failed to load demo: ' + e});
 
   }
 }
