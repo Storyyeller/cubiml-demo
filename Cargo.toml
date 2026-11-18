@@ -3,7 +3,7 @@ name = "cubiml-demo"
 version = "0.0.0"
 authors = ["Robert Grosse <n210241048576@gmail.com>"]
 license = "Apache-2.0/MIT"
-edition = "2018"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
