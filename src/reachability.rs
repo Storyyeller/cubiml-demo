@@ -15,7 +15,7 @@ impl<T: Eq + std::hash::Hash + Clone> OrderedSet<T> {
         }
     }
 
-    fn iter(&self) -> std::slice::Iter<T> {
+    fn iter(&self) -> std::slice::Iter<'_, T> {
         self.v.iter()
     }
 }

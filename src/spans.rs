@@ -13,7 +13,7 @@ pub struct SpanManager {
     spans: Vec<(usize, usize, usize)>,
 }
 impl SpanManager {
-    pub fn add_source(&mut self, source: String) -> SpanMaker {
+    pub fn add_source(&mut self, source: String) -> SpanMaker<'_> {
         let i = self.sources.len();
         self.sources.push(source);
         SpanMaker {
