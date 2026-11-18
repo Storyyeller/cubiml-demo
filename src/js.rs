@@ -372,6 +372,7 @@ impl Expr2 {
             }
             Self::Ternary(cond, e1, e2) => {
                 cond.add_parens();
+                cond.ensure(LOR);
                 e1.add_parens();
                 e1.ensure(ASSIGN);
                 e2.add_parens();
